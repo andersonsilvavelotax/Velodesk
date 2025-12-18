@@ -2857,11 +2857,11 @@ function handleTicketFileUpload(ticketId, event) {
             'application/x-zip-compressed'
         ];
         
-        // Aceitar TODOS os formatos de imagem
-        const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|tif|heic|heif|avif|jfif|pjpeg|pjp|apng|cur|dib|pcx|psd|raw|cr2|nef|orf|sr2|x3f|arw|rw2|raf|3fr|mef|mrw|pef|srw|rwl|rwz|rwl2|rwz2)$/i;
+        // Aceitar TODOS os formatos de imagem (regex para validação)
+        const imageExtensionsRegex = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|tif|heic|heif|avif|jfif|pjpeg|pjp|apng|cur|dib|pcx|psd|raw|cr2|nef|orf|sr2|x3f|arw|rw2|raf|3fr|mef|mrw|pef|srw|rwl|rwz|rwl2|rwz2)$/i;
         
         const isValidType = allowedTypes.some(type => file.type.startsWith(type)) || 
-                           imageExtensions.test(file.name) ||
+                           imageExtensionsRegex.test(file.name) ||
                            file.name.match(/\.(pdf|doc|docx|xls|xlsx|txt|csv|zip|rar)$/i);
         
         if (!isValidType) {
@@ -2871,14 +2871,14 @@ function handleTicketFileUpload(ticketId, event) {
         
         // Detectar tipo de arquivo (imagem) - aceitar TODOS os formatos de imagem
         const fileExtension = file.name.split('.').pop().toLowerCase();
-        const imageExtensions = [
+        const imageExtensionsList = [
             'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 
             'tiff', 'tif', 'heic', 'heif', 'avif', 'jfif', 'pjpeg', 
             'pjp', 'apng', 'cur', 'dib', 'pcx', 'psd', 'raw', 'cr2', 
             'nef', 'orf', 'sr2', 'x3f', 'arw', 'rw2', 'raf', '3fr', 
             'mef', 'mrw', 'pef', 'srw', 'rwl', 'rwz', 'rwl2', 'rwz2'
         ];
-        const isImage = imageExtensions.includes(fileExtension) || file.type.startsWith('image/');
+        const isImage = imageExtensionsList.includes(fileExtension) || file.type.startsWith('image/');
         
         const reader = new FileReader();
         reader.onload = function(e) {
