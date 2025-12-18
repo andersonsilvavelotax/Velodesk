@@ -2716,65 +2716,79 @@ function setupFormFieldEvents(ticketId) {
     console.log('Ticket ID:', ticketId);
     
     // Aguardar um pouco para garantir que o DOM foi renderizado
-    setTimeout(() => {
-        const formFieldsContainer = document.getElementById('ticketFormFields');
-        if (!formFieldsContainer) {
-            console.log('❌ Container não encontrado após timeout');
-            return;
+    // Tentar encontrar o container com diferentes IDs possíveis
+    let formFieldsContainer = null;
+    let attempts = 0;
+    const maxAttempts = 10; // 10 tentativas = 1 segundo
+    
+    const checkContainer = () => {
+        attempts++;
+        
+        // Tentar diferentes IDs possíveis
+        formFieldsContainer = document.getElementById('ticketFormFields') || 
+                            document.getElementById(`ticketFormFields-${ticketId}`) ||
+                            document.getElementById(`ticketFormFields-${ticketId.toString()}`);
+        
+        if (formFieldsContainer) {
+            console.log('✅ Container encontrado após', attempts * 100, 'ms');
+            
+            // Configurar eventos para campos de árvore
+            const treeFields = formFieldsContainer.querySelectorAll('.tree-selection-container');
+            console.log('Campos de árvore encontrados:', treeFields.length);
+            treeFields.forEach(container => {
+                setupCascadeTreeEvents(container, ticketId);
+            });
+            
+            // Configurar eventos para todos os inputs
+            const allInputs = formFieldsContainer.querySelectorAll('input, select, textarea');
+            console.log('Total de inputs encontrados:', allInputs.length);
+            
+            allInputs.forEach((input, index) => {
+                const fieldContainer = input.closest('.ticket-form-field');
+                if (!fieldContainer) return;
+                
+                const fieldId = fieldContainer.getAttribute('data-field-id');
+                if (!fieldId) return;
+                
+                // Remover listeners anteriores para evitar duplicação
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+                
+                // Configurar eventos baseado no tipo de campo
+                if (newInput.type === 'checkbox') {
+                    newInput.addEventListener('change', (e) => {
+                        updateTicketFormDataCheckbox(fieldId, e.target.checked);
+                    });
+                } else if (newInput.tagName === 'SELECT') {
+                    newInput.addEventListener('change', (e) => {
+                        updateTicketFormData(fieldId, e.target.value);
+                    });
+                } else {
+                    newInput.addEventListener('input', (e) => {
+                        updateTicketFormData(fieldId, e.target.value);
+                    });
+                }
+            });
+            
+            return true;
         }
         
-        console.log('✅ Container encontrado após timeout');
+        if (attempts < maxAttempts) {
+            setTimeout(checkContainer, 100);
+        } else {
+            console.log('❌ Container não encontrado após', maxAttempts * 100, 'ms');
+            console.log('Tentando IDs:', [
+                'ticketFormFields',
+                `ticketFormFields-${ticketId}`,
+                `ticketFormFields-${ticketId.toString()}`
+            ]);
+        }
         
-        // Configurar eventos para campos de árvore
-        const treeFields = document.querySelectorAll('.tree-selection-container');
-        console.log('Campos de árvore encontrados:', treeFields.length);
-        treeFields.forEach(container => {
-            setupCascadeTreeEvents(container, ticketId);
-        });
-        
-        // Configurar eventos para todos os inputs
-        const allInputs = formFieldsContainer.querySelectorAll('input, select, textarea');
-        console.log('Total de inputs encontrados:', allInputs.length);
-        
-        allInputs.forEach((input, index) => {
-            const fieldContainer = input.closest('.ticket-form-field');
-            if (!fieldContainer) return;
-            
-            const fieldId = fieldContainer.getAttribute('data-field-id');
-            if (!fieldId) return;
-            
-            console.log(`Configurando evento ${index + 1}: ${fieldId}`);
-            
-            // Remover eventos anteriores
-            input.removeEventListener('input', handleFieldChange);
-            input.removeEventListener('change', handleFieldChange);
-            
-            // Adicionar novo evento
-            if (input.type === 'checkbox') {
-                input.addEventListener('change', function() {
-                    console.log(`Checkbox ${fieldId} alterado:`, this.checked);
-                    updateTicketFormDataCheckbox(fieldId, this.checked);
-                });
-            } else if (input.type === 'radio') {
-                input.addEventListener('change', function() {
-                    console.log(`Radio ${fieldId} alterado:`, this.value);
-                    updateTicketFormData(fieldId, this.value);
-                });
-            } else if (input.tagName === 'SELECT') {
-                input.addEventListener('change', function() {
-                    console.log(`Select ${fieldId} alterado:`, this.value);
-                    updateTicketFormData(fieldId, this.value);
-                });
-            } else {
-                input.addEventListener('input', function() {
-                    console.log(`Input ${fieldId} alterado:`, this.value);
-                    updateTicketFormData(fieldId, this.value);
-                });
-            }
-        });
-        
-        console.log('=== EVENTOS CONFIGURADOS ===');
-    }, 100);
+        return false;
+    };
+    
+    // Iniciar verificação
+    setTimeout(checkContainer, 100);
 }
 
 // Função genérica para lidar com mudanças nos campos
@@ -5066,6 +5080,88 @@ function switchConfigTab(tabName) {
         loadFieldsTab();
     } else if (tabName === 'email') {
         loadEmailTab();
+        // Garantir que os botões tenham os event listeners após carregar a aba
+        setTimeout(() => {
+            setupEmailTabButtons();
+        }, 100);
+    }
+}
+
+// Função para configurar botões da aba de e-mail
+function setupEmailTabButtons() {
+    console.log('Configurando botões da aba de e-mail...');
+    
+    // Tentar encontrar os botões de várias formas
+    const emailTab = document.getElementById('emailTab');
+    if (!emailTab) {
+        console.warn('Aba de e-mail não encontrada');
+        return;
+    }
+    
+    // Procurar botões dentro da aba de e-mail
+    const saveBtn = emailTab.querySelector('button.btn-primary');
+    const testBtn = emailTab.querySelector('button.btn-secondary');
+    
+    if (saveBtn) {
+        console.log('Botão Salvar encontrado');
+        // Remover onclick antigo e adicionar novo listener
+        saveBtn.removeAttribute('onclick');
+        saveBtn.onclick = null;
+        
+        // Remover todos os event listeners anteriores clonando o botão
+        const newSaveBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+        
+        // Adicionar novo event listener
+        newSaveBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('✅ Botão Salvar clicado via event listener');
+            saveEmailSettings();
+        });
+        
+        // Também definir onclick como fallback
+        newSaveBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('✅ Botão Salvar clicado via onclick');
+            saveEmailSettings();
+        };
+        
+        console.log('✅ Botão Salvar configurado');
+    } else {
+        console.warn('❌ Botão Salvar não encontrado na aba de e-mail');
+    }
+    
+    if (testBtn) {
+        console.log('Botão Testar encontrado');
+        // Remover onclick antigo e adicionar novo listener
+        testBtn.removeAttribute('onclick');
+        testBtn.onclick = null;
+        
+        // Remover todos os event listeners anteriores clonando o botão
+        const newTestBtn = testBtn.cloneNode(true);
+        testBtn.parentNode.replaceChild(newTestBtn, testBtn);
+        
+        // Adicionar novo event listener
+        newTestBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('✅ Botão Testar clicado via event listener');
+            testEmailSettings();
+        });
+        
+        // Também definir onclick como fallback
+        newTestBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('✅ Botão Testar clicado via onclick');
+            testEmailSettings();
+        };
+        
+        console.log('✅ Botão Testar configurado');
+    } else {
+        console.warn('❌ Botão Testar não encontrado na aba de e-mail');
     }
 }
 
@@ -5088,6 +5184,28 @@ function loadUsersTab() {
     }
     
     usersList.innerHTML = '';
+    
+    // Botão para enviar e-mails em massa
+    const bulkEmailButton = document.createElement('div');
+    bulkEmailButton.className = 'bulk-email-section';
+    bulkEmailButton.style.marginBottom = '1rem';
+    bulkEmailButton.style.padding = '1rem';
+    bulkEmailButton.style.background = 'var(--white)';
+    bulkEmailButton.style.borderRadius = '8px';
+    bulkEmailButton.style.border = '1px solid #e9ecef';
+    bulkEmailButton.innerHTML = `
+        <h5 style="margin: 0 0 0.5rem 0; color: var(--primary-blue);">
+            <i class="fas fa-envelope-open-text"></i> Envio em Massa
+        </h5>
+        <p style="margin: 0 0 1rem 0; color: var(--dark-gray); font-size: 0.9rem;">
+            Envie e-mails de criação de senha para todos os usuários que ainda não têm senha configurada.
+        </p>
+        <button class="btn-primary" onclick="sendBulkPasswordSetupEmails()" style="width: 100%;">
+            <i class="fas fa-paper-plane"></i> Enviar E-mails para Todos os Usuários sem Senha
+        </button>
+    `;
+    usersList.appendChild(bulkEmailButton);
+    
     users.forEach(user => {
         const userItem = document.createElement('div');
         userItem.className = 'user-item';
@@ -5098,6 +5216,7 @@ function loadUsersTab() {
                 </h4>
                 <p>${user.email}</p>
                 <span class="user-role">${getUserRoleName(user.role)}</span>
+                ${!user.passwordSet && !user.password ? '<span style="color: #ff9800; font-size: 0.85rem;"><i class="fas fa-exclamation-triangle"></i> Sem senha</span>' : ''}
             </div>
             <div class="user-actions">
                 <button class="btn-secondary" onclick="editUser(${user.id})" title="Editar">
@@ -7548,49 +7667,72 @@ function createBulkUsers() {
 
 // Carregar aba de e-mail
 function loadEmailTab() {
+    console.log('Carregando aba de e-mail...');
     const emailSettings = JSON.parse(localStorage.getItem('emailSettings') || '{}');
     
-    // Preencher campos
-    if (emailSettings.supportEmail) {
-        const supportEmailInput = document.getElementById('emailSupport');
-        if (supportEmailInput) supportEmailInput.value = emailSettings.supportEmail;
-    }
-    if (emailSettings.smtpHost) {
-        const smtpHostInput = document.getElementById('smtpHost');
-        if (smtpHostInput) smtpHostInput.value = emailSettings.smtpHost;
-    }
-    if (emailSettings.smtpPort) {
-        const smtpPortInput = document.getElementById('smtpPort');
-        if (smtpPortInput) smtpPortInput.value = emailSettings.smtpPort;
-    }
-    if (emailSettings.smtpSecure !== undefined) {
-        const smtpSecureSelect = document.getElementById('smtpSecure');
-        if (smtpSecureSelect) smtpSecureSelect.value = emailSettings.smtpSecure;
-    }
-    if (emailSettings.smtpUser) {
-        const smtpUserInput = document.getElementById('smtpUser');
-        if (smtpUserInput) smtpUserInput.value = emailSettings.smtpUser;
-    }
-    if (emailSettings.smtpPassword) {
-        const smtpPasswordInput = document.getElementById('smtpPassword');
-        if (smtpPasswordInput) smtpPasswordInput.value = emailSettings.smtpPassword;
-    }
-    if (emailSettings.smtpFromName) {
-        const smtpFromNameInput = document.getElementById('smtpFromName');
-        if (smtpFromNameInput) smtpFromNameInput.value = emailSettings.smtpFromName;
-    }
+    // Aguardar um pouco para garantir que o DOM está pronto
+    setTimeout(() => {
+        // Preencher campos
+        if (emailSettings.supportEmail) {
+            const supportEmailInput = document.getElementById('emailSupport');
+            if (supportEmailInput) supportEmailInput.value = emailSettings.supportEmail;
+        }
+        if (emailSettings.smtpHost) {
+            const smtpHostInput = document.getElementById('smtpHost');
+            if (smtpHostInput) smtpHostInput.value = emailSettings.smtpHost;
+        }
+        if (emailSettings.smtpPort) {
+            const smtpPortInput = document.getElementById('smtpPort');
+            if (smtpPortInput) smtpPortInput.value = emailSettings.smtpPort;
+        }
+        if (emailSettings.smtpSecure !== undefined) {
+            const smtpSecureSelect = document.getElementById('smtpSecure');
+            if (smtpSecureSelect) smtpSecureSelect.value = emailSettings.smtpSecure ? 'true' : 'false';
+        }
+        if (emailSettings.smtpUser) {
+            const smtpUserInput = document.getElementById('smtpUser');
+            if (smtpUserInput) smtpUserInput.value = emailSettings.smtpUser;
+        }
+        if (emailSettings.smtpPassword) {
+            const smtpPasswordInput = document.getElementById('smtpPassword');
+            if (smtpPasswordInput) smtpPasswordInput.value = emailSettings.smtpPassword;
+        }
+        if (emailSettings.smtpFromName) {
+            const smtpFromNameInput = document.getElementById('smtpFromName');
+            if (smtpFromNameInput) smtpFromNameInput.value = emailSettings.smtpFromName;
+        }
+        
+        // Configurar botões
+        setupEmailTabButtons();
+    }, 50);
 }
 
 // Salvar configurações de e-mail
 function saveEmailSettings() {
+    console.log('Salvando configurações de e-mail...');
+    
+    const emailSupport = document.getElementById('emailSupport');
+    const smtpHost = document.getElementById('smtpHost');
+    const smtpPort = document.getElementById('smtpPort');
+    const smtpSecure = document.getElementById('smtpSecure');
+    const smtpUser = document.getElementById('smtpUser');
+    const smtpPassword = document.getElementById('smtpPassword');
+    const smtpFromName = document.getElementById('smtpFromName');
+    
+    if (!emailSupport || !smtpHost || !smtpPort || !smtpSecure || !smtpUser || !smtpPassword || !smtpFromName) {
+        console.error('Campos de e-mail não encontrados!');
+        showNotification('Erro: Campos de configuração não encontrados. Recarregue a página.', 'error');
+        return;
+    }
+    
     const emailSettings = {
-        supportEmail: document.getElementById('emailSupport').value.trim(),
-        smtpHost: document.getElementById('smtpHost').value.trim(),
-        smtpPort: parseInt(document.getElementById('smtpPort').value) || 587,
-        smtpSecure: document.getElementById('smtpSecure').value === 'true',
-        smtpUser: document.getElementById('smtpUser').value.trim(),
-        smtpPassword: document.getElementById('smtpPassword').value,
-        smtpFromName: document.getElementById('smtpFromName').value.trim() || 'Velodesk Suporte'
+        supportEmail: emailSupport.value.trim(),
+        smtpHost: smtpHost.value.trim(),
+        smtpPort: parseInt(smtpPort.value) || 587,
+        smtpSecure: smtpSecure.value === 'true',
+        smtpUser: smtpUser.value.trim(),
+        smtpPassword: smtpPassword.value,
+        smtpFromName: smtpFromName.value.trim() || 'Velodesk Suporte'
     };
     
     // Validação básica
@@ -7605,6 +7747,7 @@ function saveEmailSettings() {
     }
     
     localStorage.setItem('emailSettings', JSON.stringify(emailSettings));
+    console.log('Configurações salvas:', emailSettings);
     showNotification('Configurações de e-mail salvas com sucesso!', 'success');
 }
 
@@ -7858,6 +8001,79 @@ function sendPasswordSetupEmailToUser(userId) {
     // Enviar e-mail
     sendPasswordSetupEmail(user.email, user.name, passwordToken);
     showNotification('E-mail de cadastro de senha enviado com sucesso!', 'success');
+}
+
+// Enviar e-mails de criação de senha em massa para todos os usuários sem senha
+function sendBulkPasswordSetupEmails() {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    
+    // Filtrar usuários sem senha
+    const usersWithoutPassword = users.filter(u => 
+        u.active && (!u.passwordSet && !u.password)
+    );
+    
+    if (usersWithoutPassword.length === 0) {
+        showNotification('Todos os usuários já possuem senha configurada!', 'info');
+        return;
+    }
+    
+    if (!confirm(`Deseja enviar e-mails de criação de senha para ${usersWithoutPassword.length} usuário(s)?`)) {
+        return;
+    }
+    
+    // Verificar configurações SMTP
+    const emailSettings = JSON.parse(localStorage.getItem('emailSettings') || '{}');
+    if (!emailSettings.smtpHost || !emailSettings.smtpUser) {
+        showNotification('Configure o SMTP nas configurações de e-mail antes de enviar e-mails em massa!', 'error');
+        return;
+    }
+    
+    let sentCount = 0;
+    let errorCount = 0;
+    
+    // Enviar e-mails um por um
+    usersWithoutPassword.forEach((user, index) => {
+        setTimeout(() => {
+            // Gerar novo token
+            const passwordToken = generatePasswordToken();
+            const tokenExpiry = new Date();
+            tokenExpiry.setDate(tokenExpiry.getDate() + 7);
+            
+            // Atualizar token do usuário
+            const userIndex = users.findIndex(u => u.id === user.id);
+            if (userIndex !== -1) {
+                users[userIndex].passwordToken = passwordToken;
+                users[userIndex].passwordTokenExpiry = tokenExpiry.toISOString();
+                users[userIndex].passwordSet = false;
+            }
+            
+            // Enviar e-mail
+            try {
+                sendPasswordSetupEmail(user.email, user.name, passwordToken);
+                sentCount++;
+            } catch (error) {
+                console.error(`Erro ao enviar e-mail para ${user.email}:`, error);
+                errorCount++;
+            }
+            
+            // Salvar usuários atualizados
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Mostrar resultado final quando terminar
+            if (index === usersWithoutPassword.length - 1) {
+                setTimeout(() => {
+                    if (errorCount > 0) {
+                        showNotification(`${sentCount} e-mail(s) enviado(s) com sucesso! ${errorCount} erro(s).`, 'warning');
+                    } else {
+                        showNotification(`${sentCount} e-mail(s) de criação de senha enviado(s) com sucesso!`, 'success');
+                    }
+                    loadUsersTab(); // Recarregar lista
+                }, 2000);
+            }
+        }, index * 500); // Delay de 500ms entre cada e-mail para não sobrecarregar
+    });
+    
+    showNotification(`Enviando e-mails para ${usersWithoutPassword.length} usuário(s)...`, 'info');
 }
 
 // Reset de senha do usuário (gera senha aleatória e envia por e-mail)
