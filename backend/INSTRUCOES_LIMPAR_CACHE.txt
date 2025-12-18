@@ -1,0 +1,42 @@
+========================================
+  COMO LIMPAR O CACHE DO WHATSAPP WEB
+========================================
+
+O cache não pode ser removido enquanto o servidor está rodando!
+
+PASSO 1: PARAR O SERVIDOR
+--------------------------
+1. No terminal onde o servidor está rodando, pressione:
+   Ctrl + C
+
+2. Aguarde alguns segundos para o servidor encerrar completamente
+
+PASSO 2: LIMPAR O CACHE
+-----------------------
+Opção A - Usar o script (mais fácil):
+   Execute: limpar_cache.bat
+
+Opção B - Manualmente:
+   1. Feche todos os processos do Chrome/Puppeteer
+   2. Execute no terminal:
+      rmdir /s /q .wwebjs_auth
+      rmdir /s /q .wwebjs_cache
+
+PASSO 3: REINICIAR O SERVIDOR
+------------------------------
+Execute:
+   npm start
+
+PASSO 4: ESCANEAR QR CODE NOVAMENTE
+-----------------------------------
+Será necessário escanear o QR Code novamente após limpar o cache.
+
+========================================
+NOTA IMPORTANTE
+========================================
+- O cache armazena a sessão do WhatsApp
+- Limpar o cache força uma nova autenticação
+- Você precisará escanear o QR Code novamente
+- Isso resolve o erro "getIsMyContact is not a function"
+
+
