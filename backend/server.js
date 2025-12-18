@@ -4,6 +4,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 // Configuração para evitar erros de versão do WhatsApp Web
 process.env.DISABLE_AUTO_UPDATE = 'true';
@@ -582,6 +583,214 @@ app.get('/health', (req, res) => {
             hasClient: whatsappClient !== null
         }
     });
+});
+
+// ============================================
+// ENDPOINT DE ENVIO DE E-MAIL
+// ============================================
+app.post('/api/email/send', async (req, res) => {
+    try {
+        const { emailSettings, emailData } = req.body;
+
+        // Validar dados recebidos
+        if (!emailSettings || !emailData) {
+            return res.status(400).json({
+                error: 'Dados incompletos',
+                message: 'emailSettings e emailData são obrigatórios'
+            });
+        }
+
+        if (!emailData.to || !emailData.subject || !emailData.html) {
+            return res.status(400).json({
+                error: 'Dados de e-mail incompletos',
+                message: 'to, subject e html são obrigatórios'
+            });
+        }
+
+        // Validar configurações SMTP
+        if (!emailSettings.smtpHost || !emailSettings.smtpUser) {
+            return res.status(400).json({
+                error: 'Configurações SMTP incompletas',
+                message: 'smtpHost e smtpUser são obrigatórios'
+            });
+        }
+
+        // Criar transporter do Nodemailer
+        const transporter = nodemailer.createTransport({
+            host: emailSettings.smtpHost,
+            port: emailSettings.smtpPort || 587,
+            secure: emailSettings.smtpSecure === true || emailSettings.smtpPort === 465,
+            auth: {
+                user: emailSettings.smtpUser,
+                pass: emailSettings.smtpPassword || ''
+            },
+            tls: {
+                rejectUnauthorized: false // Aceitar certificados auto-assinados (use com cuidado em produção)
+            }
+        });
+
+        // Verificar conexão SMTP
+        await transporter.verify();
+
+        // Preparar opções do e-mail
+        const mailOptions = {
+            from: `"${emailSettings.smtpFromName || 'Velodesk Suporte'}" <${emailSettings.smtpUser}>`,
+            to: emailData.to,
+            subject: emailData.subject,
+            html: emailData.html,
+            text: emailData.text || emailData.html.replace(/<[^>]*>/g, '') // Versão texto do HTML
+        };
+
+        // Enviar e-mail
+        const info = await transporter.sendMail(mailOptions);
+
+        console.log('E-mail enviado com sucesso:', {
+            to: emailData.to,
+            subject: emailData.subject,
+            messageId: info.messageId
+        });
+
+        res.json({
+            success: true,
+            message: 'E-mail enviado com sucesso',
+            messageId: info.messageId,
+            to: emailData.to
+        });
+
+    } catch (error) {
+        console.error('Erro ao enviar e-mail:', error);
+
+        // Mensagens de erro mais amigáveis
+        let errorMessage = 'Erro ao enviar e-mail';
+        let statusCode = 500;
+
+        if (error.code === 'EAUTH') {
+            errorMessage = 'Erro de autenticação SMTP. Verifique usuário e senha.';
+            statusCode = 401;
+        } else if (error.code === 'ECONNECTION') {
+            errorMessage = 'Erro de conexão com servidor SMTP. Verifique o host e porta.';
+            statusCode = 503;
+        } else if (error.code === 'ETIMEDOUT') {
+            errorMessage = 'Timeout ao conectar com servidor SMTP.';
+            statusCode = 504;
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        res.status(statusCode).json({
+            success: false,
+            error: errorMessage,
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Testar configurações SMTP
+app.post('/api/email/test', async (req, res) => {
+    try {
+        const { emailSettings, testEmail } = req.body;
+
+        if (!emailSettings || !testEmail) {
+            return res.status(400).json({
+                error: 'Dados incompletos',
+                message: 'emailSettings e testEmail são obrigatórios'
+            });
+        }
+
+        if (!emailSettings.smtpHost || !emailSettings.smtpUser) {
+            return res.status(400).json({
+                error: 'Configurações SMTP incompletas',
+                message: 'smtpHost e smtpUser são obrigatórios'
+            });
+        }
+
+        // Criar transporter
+        const transporter = nodemailer.createTransport({
+            host: emailSettings.smtpHost,
+            port: emailSettings.smtpPort || 587,
+            secure: emailSettings.smtpSecure === true || emailSettings.smtpPort === 465,
+            auth: {
+                user: emailSettings.smtpUser,
+                pass: emailSettings.smtpPassword || ''
+            },
+            tls: {
+                rejectUnauthorized: false
+            }
+        });
+
+        // Verificar conexão
+        await transporter.verify();
+
+        // Enviar e-mail de teste
+        const mailOptions = {
+            from: `"${emailSettings.smtpFromName || 'Velodesk Suporte'}" <${emailSettings.smtpUser}>`,
+            to: testEmail,
+            subject: 'Teste de Configuração - Velodesk',
+            html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                        .header { background: #000058; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+                        .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 5px 5px; }
+                        .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h1>Velodesk</h1>
+                        </div>
+                        <div class="content">
+                            <h2>Teste de Configuração de E-mail</h2>
+                            <p>Este é um e-mail de teste do sistema Velodesk.</p>
+                            <p>Se você recebeu este e-mail, suas configurações SMTP estão funcionando corretamente!</p>
+                            <p><strong>Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+                        </div>
+                        <div class="footer">
+                            <p>Este é um e-mail automático, por favor não responda.</p>
+                            <p>&copy; ${new Date().getFullYear()} Velodesk - Sistema de Gestão de Chamados</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+            `
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+
+        res.json({
+            success: true,
+            message: 'E-mail de teste enviado com sucesso',
+            messageId: info.messageId,
+            to: testEmail
+        });
+
+    } catch (error) {
+        console.error('Erro ao testar e-mail:', error);
+
+        let errorMessage = 'Erro ao enviar e-mail de teste';
+        let statusCode = 500;
+
+        if (error.code === 'EAUTH') {
+            errorMessage = 'Erro de autenticação SMTP. Verifique usuário e senha.';
+            statusCode = 401;
+        } else if (error.code === 'ECONNECTION') {
+            errorMessage = 'Erro de conexão com servidor SMTP. Verifique o host e porta.';
+            statusCode = 503;
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+
+        res.status(statusCode).json({
+            success: false,
+            error: errorMessage,
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
 });
 
 // Iniciar servidor

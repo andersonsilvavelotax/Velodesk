@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/compromise@14.10.0/builds/compromise.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
     <!-- Login Screen -->
@@ -29,6 +30,19 @@
                     <input type="password" id="password" required>
                 </div>
                 <button type="button" class="btn-primary" onclick="fazerLogin()">Entrar</button>
+                
+                <div style="margin: 1.5rem 0; text-align: center; position: relative;">
+                    <div style="position: relative; margin: 1rem 0;">
+                        <hr style="border: none; border-top: 1px solid #e9ecef;">
+                        <span style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: white; padding: 0 1rem; color: #666; font-size: 0.9rem;">ou</span>
+                    </div>
+                    <div id="google-signin-button" style="display: flex; justify-content: center; margin-top: 1rem; min-height: 50px;">
+                        <button type="button" id="google-signin-fallback" style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 12px; background: white; border: 1px solid #dadce0; border-radius: 4px; font-size: 14px; font-weight: 500; color: #3c4043; cursor: pointer; transition: all 0.2s;">
+                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width: 20px; height: 20px;">
+                            <span>Entrar com Google</span>
+                        </button>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
@@ -89,7 +103,8 @@
             <!-- Botão Meu Perfil -->
             <div class="profile-section">
                 <button class="profile-btn" id="profileBtn" onclick="toggleProfileMenu()">
-                    <i class="fas fa-user"></i>
+                    <img id="profileImg" src="" alt="Foto" style="width: 24px; height: 24px; border-radius: 50%; display: none; margin-right: 8px; object-fit: cover;">
+                    <i class="fas fa-user" id="profileIcon"></i>
                     <span>Meu Perfil</span>
                     <i class="fas fa-chevron-down"></i>
                 </button>
@@ -874,11 +889,7 @@
                 <div class="config-layout">
                     <div class="config-sidebar">
                         <ul class="config-menu">
-                            <li class="config-menu-item active" data-config-tab="users">
-                                <i class="fas fa-users"></i>
-                                <span>Usuários</span>
-                            </li>
-                            <li class="config-menu-item" data-config-tab="forms">
+                            <li class="config-menu-item active" data-config-tab="forms">
                                 <i class="fas fa-wpforms"></i>
                                 <span>Formulários</span>
                             </li>
@@ -906,28 +917,11 @@
                                 <i class="fas fa-list"></i>
                                 <span>Campos</span>
                             </li>
-                            <li class="config-menu-item" data-config-tab="email">
-                                <i class="fas fa-envelope"></i>
-                                <span>E-mail</span>
-                            </li>
                         </ul>
                     </div>
                     <div class="config-content">
-                        <!-- Aba Usuários -->
-                        <div id="usersTab" class="config-tab-content active">
-                            <div class="config-section">
-                                <h4>Gerenciamento de Usuários</h4>
-                                <div class="users-list" id="usersList">
-                                    <!-- Usuários serão listados aqui -->
-                                </div>
-                                <button id="addUser" class="btn-primary">
-                                    <i class="fas fa-plus"></i> Novo Usuário
-                                </button>
-                            </div>
-                        </div>
-                        
                         <!-- Aba Formulários -->
-                        <div id="formsTab" class="config-tab-content">
+                        <div id="formsTab" class="config-tab-content active">
                             <div class="config-section">
                                 <h4>Formulários Personalizados</h4>
                                 <div class="forms-stats">
@@ -1209,63 +1203,6 @@
                             </div>
                         </div>
                         
-                        <!-- Aba E-mail -->
-                        <div id="emailTab" class="config-tab-content">
-                            <div class="config-section">
-                                <h4>Configurações de E-mail</h4>
-                                <div class="email-settings-form">
-                                    <div class="form-group">
-                                        <label for="emailSupport">E-mail para Receber Chamados:</label>
-                                        <input type="email" id="emailSupport" placeholder="suporte@empresa.com">
-                                        <small>E-mail que receberá notificações de novos chamados</small>
-                                    </div>
-                                    
-                                    <h5 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--primary-blue);">Configurações SMTP (Envio de E-mails)</h5>
-                                    
-                                    <div class="form-group">
-                                        <label for="smtpHost">Servidor SMTP:</label>
-                                        <input type="text" id="smtpHost" placeholder="smtp.gmail.com">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="smtpPort">Porta:</label>
-                                        <input type="number" id="smtpPort" placeholder="587" value="587">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="smtpSecure">Segurança:</label>
-                                        <select id="smtpSecure">
-                                            <option value="false">Nenhuma</option>
-                                            <option value="true" selected>TLS/SSL</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="smtpUser">Usuário/E-mail:</label>
-                                        <input type="email" id="smtpUser" placeholder="seu-email@gmail.com">
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="smtpPassword">Senha:</label>
-                                        <input type="password" id="smtpPassword" placeholder="Senha do e-mail ou senha de app">
-                                        <small>Para Gmail, use uma senha de aplicativo</small>
-                                    </div>
-                                    
-                                    <div class="form-group">
-                                        <label for="smtpFromName">Nome do Remetente:</label>
-                                        <input type="text" id="smtpFromName" placeholder="Velodesk Suporte" value="Velodesk Suporte">
-                                    </div>
-                                    
-                                    <button class="btn-primary" onclick="saveEmailSettings()">
-                                        <i class="fas fa-save"></i> Salvar Configurações
-                                    </button>
-                                    
-                                    <button class="btn-secondary" onclick="testEmailSettings()" style="margin-left: 10px;">
-                                        <i class="fas fa-paper-plane"></i> Testar Envio
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1334,66 +1271,6 @@
 
     <!-- Modal Configuração de Campo - Removido completamente, não deve aparecer na aba de tickets -->
 
-    <!-- Discador Flutuante 55pbx -->
-    <div id="floatingDialer" class="floating-dialer">
-        <div class="dialer-toggle" id="dialerToggle" title="Arraste para mover ou clique para abrir">
-            <i class="fas fa-phone"></i>
-            <i class="fas fa-grip-vertical dialer-drag-handle" title="Arraste para mover"></i>
-        </div>
-        <div class="dialer-container" id="dialerContainer" style="display: none;">
-            <div class="dialer-header">
-                <h3>Discador</h3>
-                <div class="dialer-header-actions">
-                    <button class="dialer-header-btn" onclick="openDialerHistory()" title="Histórico">
-                        <i class="fas fa-history"></i>
-                    </button>
-                    <button class="dialer-header-btn" onclick="openDialerPauses()" title="Pausas">
-                        <i class="fas fa-pause-circle"></i>
-                    </button>
-                    <button class="dialer-header-btn" onclick="openPbxConfig()" title="Configurações">
-                        <i class="fas fa-cog"></i>
-                    </button>
-                    <button class="dialer-close" onclick="toggleDialer()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="dialer-body">
-                <div class="dialer-display">
-                    <input type="text" id="dialerNumber" class="dialer-number-input" placeholder="Digite o número" readonly>
-                </div>
-                <div class="dialer-keypad">
-                    <button class="dialer-key" onclick="dialerInput('1')">1</button>
-                    <button class="dialer-key" onclick="dialerInput('2')">2 <span class="dialer-letters">ABC</span></button>
-                    <button class="dialer-key" onclick="dialerInput('3')">3 <span class="dialer-letters">DEF</span></button>
-                    <button class="dialer-key" onclick="dialerInput('4')">4 <span class="dialer-letters">GHI</span></button>
-                    <button class="dialer-key" onclick="dialerInput('5')">5 <span class="dialer-letters">JKL</span></button>
-                    <button class="dialer-key" onclick="dialerInput('6')">6 <span class="dialer-letters">MNO</span></button>
-                    <button class="dialer-key" onclick="dialerInput('7')">7 <span class="dialer-letters">PQRS</span></button>
-                    <button class="dialer-key" onclick="dialerInput('8')">8 <span class="dialer-letters">TUV</span></button>
-                    <button class="dialer-key" onclick="dialerInput('9')">9 <span class="dialer-letters">WXYZ</span></button>
-                    <button class="dialer-key" onclick="dialerInput('*')">*</button>
-                    <button class="dialer-key" onclick="dialerInput('0')">0 <span class="dialer-letters">+</span></button>
-                    <button class="dialer-key" onclick="dialerInput('#')">#</button>
-                </div>
-                <div class="dialer-actions">
-                    <button class="dialer-action-btn dialer-call" onclick="makeCall()" id="dialerCallBtn">
-                        <i class="fas fa-phone"></i> Ligar
-                    </button>
-                    <button class="dialer-action-btn dialer-backspace" onclick="dialerBackspace()">
-                        <i class="fas fa-backspace"></i>
-                    </button>
-                    <button class="dialer-action-btn dialer-clear" onclick="dialerClear()">
-                        <i class="fas fa-times"></i> Limpar
-                    </button>
-                </div>
-                <div class="dialer-status" id="dialerStatus">
-                    <span class="status-text">Pronto para discar</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Modal Assistente IA -->
     <div id="aiChatbotModal" class="modal">
         <div class="modal-content ai-chatbot-modal">
@@ -1427,6 +1304,7 @@
     </div>
     
     <!-- Scripts -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="login-simple-fixed.js"></script>
     
 </body>

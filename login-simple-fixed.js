@@ -1,10 +1,236 @@
 // Sistema Velodesk - Versão Simplificada
 console.log('Sistema Velodesk carregando...');
 
-// Função de login
+// Domínio permitido para login
+const ALLOWED_DOMAIN = 'velotax.com.br';
+
+// Client ID do Google (SUBSTITUA PELO SEU CLIENT ID)
+// Para obter: https://console.cloud.google.com/apis/credentials
+const GOOGLE_CLIENT_ID = 'SEU_CLIENT_ID_AQUI.apps.googleusercontent.com';
+
+// Inicializar Google Sign-In quando o script carregar
+function initializeGoogleSignIn() {
+    const buttonContainer = document.getElementById('google-signin-button');
+    if (!buttonContainer) {
+        console.warn('Container do botão Google não encontrado. Tentando novamente em 500ms...');
+        setTimeout(initializeGoogleSignIn, 500);
+        return;
+    }
+    
+    console.log('Inicializando Google Sign-In...');
+    
+    // Verificar se o script do Google está carregado
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+        console.log('Google Sign-In script não carregado. Aguardando carregamento...');
+        // Aguardar até o script carregar (máximo 10 segundos)
+        let attempts = 0;
+        const maxAttempts = 20; // 20 tentativas x 500ms = 10 segundos
+        
+        const checkGoogleScript = setInterval(() => {
+            attempts++;
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                console.log('Script do Google carregado! Inicializando...');
+                clearInterval(checkGoogleScript);
+                setupGoogleSignIn();
+            } else if (attempts >= maxAttempts) {
+                console.warn('Timeout ao aguardar script do Google. Usando fallback.');
+                clearInterval(checkGoogleScript);
+                setupGoogleSignIn(); // Usar fallback mesmo assim
+            }
+        }, 500);
+        
+        return;
+    } else {
+        console.log('Script do Google já está carregado!');
+        setupGoogleSignIn();
+    }
+}
+
+// Configurar botão do Google Sign-In
+function setupGoogleSignIn() {
+    const buttonContainer = document.getElementById('google-signin-button');
+    if (!buttonContainer) {
+        console.error('Container do botão Google não encontrado!');
+        return;
+    }
+    
+    console.log('Configurando Google Sign-In...');
+    console.log('Client ID configurado:', GOOGLE_CLIENT_ID ? 'Sim' : 'Não');
+    
+    // Verificar se Client ID está configurado
+    if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('SEU_CLIENT_ID')) {
+        console.warn('Google Client ID não configurado. Mantendo botão fallback.');
+        // Manter o botão fallback visível e adicionar evento
+        const fallbackButton = document.getElementById('google-signin-fallback');
+        if (fallbackButton) {
+            // Garantir que o botão está visível
+            fallbackButton.style.display = 'flex';
+            fallbackButton.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                alert('Por favor, configure o Client ID do Google no arquivo login-simple-fixed.js (linha 9)\n\nVeja o arquivo INSTRUCOES_GOOGLE_LOGIN.md para mais detalhes.');
+            };
+            // Adicionar aviso abaixo do botão se não existir
+            if (!buttonContainer.querySelector('p.warning-google')) {
+                const warning = document.createElement('p');
+                warning.className = 'warning-google';
+                warning.style.cssText = 'color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; text-align: center; width: 100%;';
+                warning.textContent = '⚠️ Configure o Client ID do Google';
+                buttonContainer.appendChild(warning);
+            }
+        } else {
+            // Se o botão fallback não existir, criar um
+            buttonContainer.innerHTML = `
+                <button type="button" id="google-signin-fallback" onclick="alert('Por favor, configure o Client ID do Google no arquivo login-simple-fixed.js (linha 9)')" 
+                        style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 12px; background: white; border: 1px solid #dadce0; border-radius: 4px; font-size: 14px; font-weight: 500; color: #3c4043; cursor: pointer; transition: all 0.2s;">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width: 20px; height: 20px;">
+                    <span>Entrar com Google</span>
+                </button>
+                <p class="warning-google" style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; text-align: center; width: 100%;">⚠️ Configure o Client ID do Google</p>
+            `;
+        }
+        return;
+    }
+    
+    // Verificar se o Google API está disponível antes de tentar usar
+    if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+        console.warn('Google API ainda não está disponível. Aguardando...');
+        // Tentar novamente após um delay
+        setTimeout(setupGoogleSignIn, 1000);
+        return;
+    }
+    
+    // Client ID está configurado - remover botão fallback e renderizar botão oficial do Google
+    const fallbackButton = document.getElementById('google-signin-fallback');
+    if (fallbackButton) {
+        fallbackButton.remove();
+    }
+    const warning = buttonContainer.querySelector('p.warning-google');
+    if (warning) {
+        warning.remove();
+    }
+    
+    try {
+        // Limpar container antes de renderizar
+        buttonContainer.innerHTML = '';
+        
+        // Verificar novamente se a API está disponível
+        if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+            throw new Error('Google API não está disponível');
+        }
+        
+        google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleGoogleSignIn,
+            auto_select: false,
+            cancel_on_tap_outside: true
+        });
+        
+        google.accounts.id.renderButton(
+            buttonContainer,
+            {
+                type: 'standard',
+                theme: 'outline',
+                size: 'large',
+                text: 'signin_with',
+                shape: 'rectangular',
+                logo_alignment: 'left',
+                width: '100%'
+            }
+        );
+        
+        console.log('Google Sign-In configurado com sucesso!');
+    } catch (error) {
+        console.error('Erro ao configurar Google Sign-In:', error);
+        // Criar botão fallback funcional
+        buttonContainer.innerHTML = `
+            <button type="button" id="google-signin-fallback" 
+                    style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 12px; background: white; border: 1px solid #dadce0; border-radius: 4px; font-size: 14px; font-weight: 500; color: #3c4043; cursor: pointer; transition: all 0.2s;">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" style="width: 20px; height: 20px;">
+                <span>Entrar com Google</span>
+            </button>
+            <p style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; text-align: center; width: 100%;">⚠️ Erro ao carregar Google Sign-In. Verifique o console.</p>
+        `;
+        
+        // Adicionar evento ao botão fallback
+        const fallbackBtn = document.getElementById('google-signin-fallback');
+        if (fallbackBtn) {
+            fallbackBtn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.error('Erro detalhado:', error);
+                alert('Erro ao carregar Google Sign-In.\n\nVerifique:\n1. Se o Client ID está configurado corretamente\n2. Se o domínio está autorizado no Google Cloud Console\n3. Abra o console do navegador para mais detalhes');
+            };
+        }
+    }
+}
+
+// Função de login tradicional (mantida para compatibilidade)
 function fazerLogin() {
+    const email = document.getElementById('email')?.value.trim();
+    const password = document.getElementById('password')?.value;
+    
+    if (!email || !password) {
+        showNotification('Por favor, preencha e-mail e senha!', 'error');
+        return;
+    }
+    
+    // Validar domínio
+    if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
+        showNotification(`Apenas e-mails do domínio ${ALLOWED_DOMAIN} são permitidos!`, 'error');
+        return;
+    }
+    
+    // Login bem-sucedido
+    completeLogin({
+        email: email,
+        name: email.split('@')[0],
+        picture: null
+    });
+}
+
+// Função para processar login do Google
+function handleGoogleSignIn(response) {
+    console.log('Resposta do Google:', response);
+    
+    // Decodificar o token JWT
+    try {
+        const payload = JSON.parse(atob(response.credential.split('.')[1]));
+        const email = payload.email;
+        const name = payload.name || payload.given_name || email.split('@')[0];
+        const picture = payload.picture || null;
+        
+        console.log('Dados do usuário:', { email, name, picture });
+        
+        // Validar domínio
+        if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
+            showNotification(`Apenas e-mails do domínio ${ALLOWED_DOMAIN} são permitidos!`, 'error');
+            return;
+        }
+        
+        // Completar login
+        completeLogin({ email, name, picture });
+        
+    } catch (error) {
+        console.error('Erro ao processar login do Google:', error);
+        showNotification('Erro ao processar login do Google. Tente novamente.', 'error');
+    }
+}
+
+// Função para completar o login (comum para ambos os métodos)
+function completeLogin(userData) {
     const loginScreen = document.getElementById('loginScreen');
     const mainApp = document.getElementById('mainApp');
+    
+    // Salvar dados do usuário
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('currentUser', JSON.stringify({
+        email: userData.email,
+        name: userData.name,
+        picture: userData.picture,
+        loginMethod: userData.picture ? 'google' : 'email',
+        loggedInAt: new Date().toISOString()
+    }));
     
     if (loginScreen) {
         loginScreen.style.display = 'none';
@@ -14,12 +240,33 @@ function fazerLogin() {
         mainApp.style.display = 'grid';
     }
     
-    localStorage.setItem('isLoggedIn', 'true');
-    // Login automático - sem notificação
+    showNotification(`Bem-vindo, ${userData.name}!`, 'success');
     
     // Inicializar status após login
     setTimeout(() => {
         initializeUserStatus();
+        
+        // Atualizar nome no botão do perfil
+        const profileBtn = document.getElementById('profileBtn');
+        if (profileBtn && userData.name) {
+            const span = profileBtn.querySelector('span');
+            if (span) {
+                span.textContent = userData.name;
+            }
+        }
+        
+        // Atualizar foto do perfil se disponível
+        if (userData.picture) {
+            const profileImg = document.getElementById('profileImg');
+            const profileIcon = document.getElementById('profileIcon');
+            if (profileImg) {
+                profileImg.src = userData.picture;
+                profileImg.style.display = 'block';
+                if (profileIcon) {
+                    profileIcon.style.display = 'none';
+                }
+            }
+        }
     }, 100);
 }
 
@@ -552,6 +799,7 @@ function createNewTicket() {
         updatedAt: new Date().toISOString(),
         messages: [],
         internalNotes: [],
+        attachments: [], // Array para armazenar anexos
         formId: null,
         formData: {},
         solicitante: '',
@@ -744,6 +992,21 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                                             <i class="fas fa-robot"></i> Assistente IA
                                         </button>
                                     </div>
+                                    <!-- Área de Anexos -->
+                                    <div class="ticket-attachments-section">
+                                        <label class="attachments-label">
+                                            <i class="fas fa-paperclip"></i> Anexar Arquivos
+                                        </label>
+                                        <div class="file-upload-area" id="fileUploadArea-${ticket.id}" onclick="document.getElementById('fileInput-${ticket.id}').click()">
+                                            <i class="fas fa-cloud-upload-alt"></i>
+                                            <p>Clique para anexar ou arraste arquivos aqui</p>
+                                            <small>Formatos aceitos: imagens (JPG, PNG, GIF, WEBP, SVG, BMP, TIFF, HEIC, AVIF e todos os formatos de imagem), PDF, documentos (DOC, DOCX, XLS, XLSX, TXT, CSV) e arquivos compactados (ZIP, RAR)</small>
+                                        </div>
+                                        <input type="file" id="fileInput-${ticket.id}" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar" style="display: none;" onchange="handleTicketFileUpload(${ticket.id}, event)">
+                                        <div class="uploaded-files" id="uploadedFiles-${ticket.id}">
+                                            ${renderTicketAttachments(ticket)}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -758,6 +1021,28 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Seção de Anexos do Ticket -->
+                    ${ticket.attachments && ticket.attachments.length > 0 ? `
+                    <div class="ticket-attachments-display">
+                        <h4><i class="fas fa-paperclip"></i> Arquivos Anexados</h4>
+                        <div class="attachments-list">
+                            ${ticket.attachments.map(att => `
+                                <div class="attachment-item">
+                                    <i class="fas fa-file"></i>
+                                    <span class="attachment-name">${att.name}</span>
+                                    <span class="attachment-size">${formatFileSize(att.size)}</span>
+                                    <button class="btn-icon-small" onclick="downloadTicketAttachment(${ticket.id}, '${att.id}')" title="Download">
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                    <button class="btn-icon-small btn-danger" onclick="removeTicketAttachment(${ticket.id}, '${att.id}')" title="Remover">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
 
                 <!-- Coluna Lateral - Informações do Cliente e Formulário -->
@@ -1060,6 +1345,7 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
                 updatedAt: new Date().toISOString(),
                 messages: [],
                 internalNotes: [],
+                attachments: tabInfo.ticket.attachments || [], // Preservar anexos existentes
                 solicitante: '',
                 responsibleAgent: '',
                 clientCPF: '',
@@ -1132,8 +1418,8 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
             // Salvar no localStorage
             localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
         } else {
-            showNotification('Ticket não encontrado!', 'error');
-            return;
+        showNotification('Ticket não encontrado!', 'error');
+        return;
         }
     }
     
@@ -1233,16 +1519,16 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
         });
     }
     
-    // Adicionar nota interna se houver
+    // Adicionar nota interna se houver (apenas no histórico interno, não como mensagem pública)
     if (internalNote) {
-        if (!foundTicket.messages) {
-            foundTicket.messages = [];
+        if (!foundTicket.internalNotes) {
+            foundTicket.internalNotes = [];
         }
-        foundTicket.messages.push({
+        foundTicket.internalNotes.push({
             id: Date.now() + 1,
             text: internalNote,
-            type: 'internal',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            status: newStatus
         });
     }
     
@@ -1360,6 +1646,8 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
 
 // Função para configurar eventos da aba do ticket
 function setupTicketTabEvents(ticketId) {
+    // Configurar drag and drop para upload de arquivos
+    setupTicketFileUploadDragDrop(ticketId);
     // Renderizar formulário se existir
     const formFieldsContainer = document.getElementById(`ticketFormFields-${ticketId}`);
     if (formFieldsContainer) {
@@ -2082,11 +2370,11 @@ function saveNewTicket(ticketId) {
         updatedAt: new Date().toISOString(),
         messages: [],
         internalNotes: [],
+        attachments: [], // Array para armazenar anexos
         solicitante: solicitanteInput ? solicitanteInput.value.trim() : '',
         responsibleAgent: responsibleAgentInput ? responsibleAgentInput.value.trim() : '',
         clientCPF: clientCPFInput ? clientCPFInput.value.trim() : '',
         clientName: clientNameInput ? clientNameInput.value.trim() : '',
-        responsibleAgent: responsibleAgentInput ? responsibleAgentInput.value.trim() : '',
         formId: formSelector && formSelector.value ? parseInt(formSelector.value) : null,
         formData: {}
     };
@@ -2512,6 +2800,435 @@ function saveClientData(ticketId) {
     showNotification('Dados do cliente salvos com sucesso!', 'success');
 }
 
+// ============================================
+// FUNÇÕES DE GERENCIAMENTO DE ANEXOS
+// ============================================
+
+// Função para lidar com upload de arquivos no ticket
+function handleTicketFileUpload(ticketId, event) {
+    // Suportar tanto eventos de input quanto de drag and drop
+    const files = event.target ? event.target.files : (event.files || (event.dataTransfer ? event.dataTransfer.files : null));
+    if (!files || files.length === 0) return;
+    
+    const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+    let foundTicket = null;
+    
+    // Encontrar o ticket
+    for (const box of kanbanColumns) {
+        if (box.tickets) {
+            const ticket = box.tickets.find(t => t.id === ticketId);
+            if (ticket) {
+                foundTicket = ticket;
+                break;
+            }
+        }
+    }
+    
+    if (!foundTicket) {
+        showNotification('Ticket não encontrado!', 'error');
+        return;
+    }
+    
+    // Inicializar array de anexos se não existir
+    if (!foundTicket.attachments) {
+        foundTicket.attachments = [];
+    }
+    
+    // Processar cada arquivo
+    Array.from(files).forEach(file => {
+        // Validar tamanho (máximo 10MB)
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.size > maxSize) {
+            showNotification(`Arquivo "${file.name}" excede o tamanho máximo de 10MB!`, 'error');
+            return;
+        }
+        
+        // Validar tipo de arquivo (aceitar imagens, PDFs e documentos)
+        const allowedTypes = [
+            'image/', // Todas as imagens (jpg, png, gif, webp, svg, bmp, etc.)
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'text/',
+            'application/zip',
+            'application/x-rar-compressed',
+            'application/x-zip-compressed'
+        ];
+        
+        // Aceitar TODOS os formatos de imagem
+        const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|tiff|tif|heic|heif|avif|jfif|pjpeg|pjp|apng|cur|dib|pcx|psd|raw|cr2|nef|orf|sr2|x3f|arw|rw2|raf|3fr|mef|mrw|pef|srw|rwl|rwz|rwl2|rwz2)$/i;
+        
+        const isValidType = allowedTypes.some(type => file.type.startsWith(type)) || 
+                           imageExtensions.test(file.name) ||
+                           file.name.match(/\.(pdf|doc|docx|xls|xlsx|txt|csv|zip|rar)$/i);
+        
+        if (!isValidType) {
+            showNotification(`Formato de arquivo não suportado: "${file.name}". Formatos aceitos: imagens, PDF, documentos, planilhas e arquivos compactados.`, 'error');
+            return;
+        }
+        
+        // Detectar tipo de arquivo (imagem) - aceitar TODOS os formatos de imagem
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+        const imageExtensions = [
+            'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 
+            'tiff', 'tif', 'heic', 'heif', 'avif', 'jfif', 'pjpeg', 
+            'pjp', 'apng', 'cur', 'dib', 'pcx', 'psd', 'raw', 'cr2', 
+            'nef', 'orf', 'sr2', 'x3f', 'arw', 'rw2', 'raf', '3fr', 
+            'mef', 'mrw', 'pef', 'srw', 'rwl', 'rwz', 'rwl2', 'rwz2'
+        ];
+        const isImage = imageExtensions.includes(fileExtension) || file.type.startsWith('image/');
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const attachment = {
+                id: Date.now() + Math.random(),
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: e.target.result, // Base64
+                uploadedAt: new Date().toISOString(),
+                isImage: isImage // Flag para identificar imagens
+            };
+            
+            foundTicket.attachments.push(attachment);
+            foundTicket.updatedAt = new Date().toISOString();
+            
+            // Salvar no localStorage
+            localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
+            
+            // Atualizar visualização
+            updateTicketAttachmentsDisplay(ticketId);
+            
+            showNotification(`Arquivo "${file.name}" anexado com sucesso!`, 'success');
+        };
+        
+        reader.onerror = function() {
+            showNotification(`Erro ao ler arquivo "${file.name}"!`, 'error');
+        };
+        
+        reader.readAsDataURL(file);
+    });
+    
+    // Limpar input
+    event.target.value = '';
+}
+
+// Função para renderizar anexos do ticket
+function renderTicketAttachments(ticket) {
+    if (!ticket.attachments || ticket.attachments.length === 0) {
+        return '';
+    }
+    
+    return ticket.attachments.map(att => {
+        const isImage = att.isImage || (att.type && att.type.startsWith('image/'));
+        const iconClass = isImage ? 'fas fa-image' : 'fas fa-file';
+        
+        return `
+            <div class="file-item" data-attachment-id="${att.id}">
+                <i class="${iconClass}"></i>
+                <span class="file-name" title="${att.name}">${att.name}</span>
+                <span class="file-size">${formatFileSize(att.size)}</span>
+                ${isImage ? `<button class="btn-preview" onclick="previewTicketImage(${ticket.id}, '${att.id}')" title="Visualizar">
+                    <i class="fas fa-eye"></i>
+                </button>` : ''}
+                <button class="remove-file" onclick="removeTicketAttachment(${ticket.id}, '${att.id}')" title="Remover">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+// Função para atualizar exibição de anexos
+function updateTicketAttachmentsDisplay(ticketId) {
+    const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+    let foundTicket = null;
+    
+    for (const box of kanbanColumns) {
+        if (box.tickets) {
+            const ticket = box.tickets.find(t => t.id === ticketId);
+            if (ticket) {
+                foundTicket = ticket;
+                break;
+            }
+        }
+    }
+    
+    if (!foundTicket) return;
+    
+    const uploadedFilesContainer = document.getElementById(`uploadedFiles-${ticketId}`);
+    if (uploadedFilesContainer) {
+        uploadedFilesContainer.innerHTML = renderTicketAttachments(foundTicket);
+    }
+    
+    // Atualizar também a seção de anexos exibidos
+    const attachmentsDisplay = document.querySelector(`#tab-ticket-${ticketId} .ticket-attachments-display`);
+    if (attachmentsDisplay && foundTicket.attachments && foundTicket.attachments.length > 0) {
+        attachmentsDisplay.innerHTML = `
+            <h4><i class="fas fa-paperclip"></i> Arquivos Anexados</h4>
+            <div class="attachments-list">
+                ${foundTicket.attachments.map(att => {
+                    const isImage = att.isImage || (att.type && att.type.startsWith('image/'));
+                    const fileIcon = getFileIcon(att.type, att.name);
+                    
+                    return `
+                    <div class="attachment-item ${isImage ? 'attachment-item-image' : ''}">
+                        <i class="${fileIcon}"></i>
+                        <span class="attachment-name">${att.name}</span>
+                        <span class="attachment-size">${formatFileSize(att.size)}</span>
+                        ${isImage ? `<button class="btn-icon-small" onclick="previewTicketImage(${ticketId}, '${att.id}')" title="Visualizar">
+                            <i class="fas fa-eye"></i>
+                        </button>` : ''}
+                        <button class="btn-icon-small" onclick="downloadTicketAttachment(${ticketId}, '${att.id}')" title="Download">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="btn-icon-small btn-danger" onclick="removeTicketAttachment(${ticketId}, '${att.id}')" title="Remover">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                }).join('')}
+            </div>
+        `;
+    } else if (attachmentsDisplay && (!foundTicket.attachments || foundTicket.attachments.length === 0)) {
+        attachmentsDisplay.remove();
+    }
+}
+
+// Função para remover anexo do ticket
+function removeTicketAttachment(ticketId, attachmentId) {
+    if (!confirm('Tem certeza que deseja remover este anexo?')) {
+        return;
+    }
+    
+    const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+    let foundTicket = null;
+    
+    for (const box of kanbanColumns) {
+        if (box.tickets) {
+            const ticket = box.tickets.find(t => t.id === ticketId);
+            if (ticket) {
+                foundTicket = ticket;
+                break;
+            }
+        }
+    }
+    
+    if (!foundTicket || !foundTicket.attachments) {
+        showNotification('Anexo não encontrado!', 'error');
+        return;
+    }
+    
+    const attachmentIndex = foundTicket.attachments.findIndex(att => att.id == attachmentId);
+    if (attachmentIndex === -1) {
+        showNotification('Anexo não encontrado!', 'error');
+        return;
+    }
+    
+    foundTicket.attachments.splice(attachmentIndex, 1);
+    foundTicket.updatedAt = new Date().toISOString();
+    
+    // Salvar no localStorage
+    localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
+    
+    // Atualizar visualização
+    updateTicketAttachmentsDisplay(ticketId);
+    
+    showNotification('Anexo removido com sucesso!', 'success');
+}
+
+// Função para fazer download de anexo
+function downloadTicketAttachment(ticketId, attachmentId) {
+    const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+    let foundTicket = null;
+    
+    for (const box of kanbanColumns) {
+        if (box.tickets) {
+            const ticket = box.tickets.find(t => t.id === ticketId);
+            if (ticket) {
+                foundTicket = ticket;
+                break;
+            }
+        }
+    }
+    
+    if (!foundTicket || !foundTicket.attachments) {
+        showNotification('Anexo não encontrado!', 'error');
+        return;
+    }
+    
+    const attachment = foundTicket.attachments.find(att => att.id == attachmentId);
+    if (!attachment) {
+        showNotification('Anexo não encontrado!', 'error');
+        return;
+    }
+    
+    // Criar link de download
+    const link = document.createElement('a');
+    link.href = attachment.data;
+    link.download = attachment.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Função para formatar tamanho de arquivo
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// Função para obter ícone do arquivo baseado no tipo
+function getFileIcon(fileType, fileName) {
+    if (fileType && fileType.startsWith('image/')) {
+        return 'fas fa-image';
+    } else if (fileType === 'application/pdf') {
+        return 'fas fa-file-pdf';
+    } else if (fileType && (fileType.includes('word') || fileName.match(/\.(doc|docx)$/i))) {
+        return 'fas fa-file-word';
+    } else if (fileType && (fileType.includes('excel') || fileType.includes('spreadsheet') || fileName.match(/\.(xls|xlsx)$/i))) {
+        return 'fas fa-file-excel';
+    } else if (fileType && fileType.startsWith('text/')) {
+        return 'fas fa-file-alt';
+    } else if (fileType && (fileType.includes('zip') || fileType.includes('rar') || fileName.match(/\.(zip|rar)$/i))) {
+        return 'fas fa-file-archive';
+    }
+    return 'fas fa-file';
+}
+
+// Função para visualizar imagem anexada
+function previewTicketImage(ticketId, attachmentId) {
+    const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+    let foundTicket = null;
+    
+    for (const box of kanbanColumns) {
+        if (box.tickets) {
+            const ticket = box.tickets.find(t => t.id === ticketId);
+            if (ticket) {
+                foundTicket = ticket;
+                break;
+            }
+        }
+    }
+    
+    if (!foundTicket || !foundTicket.attachments) {
+        showNotification('Anexo não encontrado!', 'error');
+        return;
+    }
+    
+    const attachment = foundTicket.attachments.find(att => att.id == attachmentId);
+    if (!attachment) {
+        showNotification('Anexo não encontrado!', 'error');
+        return;
+    }
+    
+    const isImage = attachment.isImage || (attachment.type && attachment.type.startsWith('image/'));
+    if (!isImage) {
+        showNotification('Este arquivo não é uma imagem!', 'error');
+        return;
+    }
+    
+    // Criar modal para visualizar imagem
+    const modal = document.createElement('div');
+    modal.id = 'imagePreviewModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '10000';
+    
+    modal.innerHTML = `
+        <div class="modal-content image-preview-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-image"></i> ${attachment.name}</h3>
+                <button class="close-btn" onclick="closeImagePreview()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body image-preview-body">
+                <img src="${attachment.data}" alt="${attachment.name}" style="max-width: 100%; max-height: 80vh; border-radius: 8px;">
+                <div class="image-preview-info">
+                    <p><strong>Nome:</strong> ${attachment.name}</p>
+                    <p><strong>Tamanho:</strong> ${formatFileSize(attachment.size)}</p>
+                    <p><strong>Tipo:</strong> ${attachment.type || 'Não especificado'}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="downloadTicketAttachment(${ticketId}, '${attachmentId}')">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button class="btn-secondary" onclick="closeImagePreview()">Fechar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Fechar ao clicar fora da imagem
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeImagePreview();
+        }
+    });
+}
+
+// Função para fechar preview de imagem
+function closeImagePreview() {
+    const modal = document.getElementById('imagePreviewModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Configurar drag and drop para área de upload de arquivos
+function setupTicketFileUploadDragDrop(ticketId) {
+    const uploadArea = document.getElementById(`fileUploadArea-${ticketId}`);
+    const fileInput = document.getElementById(`fileInput-${ticketId}`);
+    
+    if (!uploadArea || !fileInput) return;
+    
+    // Prevenir comportamento padrão do navegador
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    // Adicionar classe quando arrastar sobre
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.classList.add('dragover');
+        }, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+            uploadArea.classList.remove('dragover');
+        }, false);
+    });
+    
+    // Processar arquivos quando soltar
+    uploadArea.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            // Criar um evento similar ao do input file
+            const event = {
+                target: {
+                    files: files
+                }
+            };
+            handleTicketFileUpload(ticketId, event);
+        }
+    }, false);
+}
+
 // Função para renderizar campos do formulário no ticket
 function renderTicketFormFieldsSimple(ticket) {
     if (!ticket.formId) {
@@ -2731,25 +3448,25 @@ function setupFormFieldEvents(ticketId) {
         
         if (formFieldsContainer) {
             console.log('✅ Container encontrado após', attempts * 100, 'ms');
-            
-            // Configurar eventos para campos de árvore
+        
+        // Configurar eventos para campos de árvore
             const treeFields = formFieldsContainer.querySelectorAll('.tree-selection-container');
-            console.log('Campos de árvore encontrados:', treeFields.length);
-            treeFields.forEach(container => {
-                setupCascadeTreeEvents(container, ticketId);
-            });
+        console.log('Campos de árvore encontrados:', treeFields.length);
+        treeFields.forEach(container => {
+            setupCascadeTreeEvents(container, ticketId);
+        });
+        
+        // Configurar eventos para todos os inputs
+        const allInputs = formFieldsContainer.querySelectorAll('input, select, textarea');
+        console.log('Total de inputs encontrados:', allInputs.length);
+        
+        allInputs.forEach((input, index) => {
+            const fieldContainer = input.closest('.ticket-form-field');
+            if (!fieldContainer) return;
             
-            // Configurar eventos para todos os inputs
-            const allInputs = formFieldsContainer.querySelectorAll('input, select, textarea');
-            console.log('Total de inputs encontrados:', allInputs.length);
+            const fieldId = fieldContainer.getAttribute('data-field-id');
+            if (!fieldId) return;
             
-            allInputs.forEach((input, index) => {
-                const fieldContainer = input.closest('.ticket-form-field');
-                if (!fieldContainer) return;
-                
-                const fieldId = fieldContainer.getAttribute('data-field-id');
-                if (!fieldId) return;
-                
                 // Remover listeners anteriores para evitar duplicação
                 const newInput = input.cloneNode(true);
                 input.parentNode.replaceChild(newInput, input);
@@ -2762,14 +3479,14 @@ function setupFormFieldEvents(ticketId) {
                 } else if (newInput.tagName === 'SELECT') {
                     newInput.addEventListener('change', (e) => {
                         updateTicketFormData(fieldId, e.target.value);
-                    });
-                } else {
+                });
+            } else {
                     newInput.addEventListener('input', (e) => {
                         updateTicketFormData(fieldId, e.target.value);
-                    });
-                }
-            });
-            
+                });
+            }
+        });
+        
             return true;
         }
         
@@ -4858,7 +5575,6 @@ function loadConfig() {
     createTestFormIfNeeded();
     
     // Carregar dados das abas
-    loadUsersTab();
     loadFormsTab();
     loadWorkflowsTab();
     loadBackupTab();
@@ -5011,12 +5727,6 @@ function createTestFormIfNeeded() {
 
 // Função para configurar event listeners dos botões de configuração
 function setupConfigButtons() {
-    // Botão Adicionar Usuário
-    const addUserBtn = document.getElementById('addUser');
-    if (addUserBtn) {
-        addUserBtn.onclick = addUser;
-    }
-    
     // Botão Adicionar Formulário
     const addFormBtn = document.getElementById('addForm');
     if (addFormBtn) {
@@ -5072,108 +5782,22 @@ function switchConfigTab(tabName) {
     }
     
     // Carregar conteúdo específico da aba
-    if (tabName === 'users') {
-        loadUsersTab();
-    } else if (tabName === 'forms') {
+    if (tabName === 'forms') {
         loadFormsTab();
     } else if (tabName === 'fields') {
         loadFieldsTab();
-    } else if (tabName === 'email') {
-        loadEmailTab();
-        // Garantir que os botões tenham os event listeners após carregar a aba
-        setTimeout(() => {
-            setupEmailTabButtons();
-        }, 100);
     }
 }
 
-// Função para configurar botões da aba de e-mail
-function setupEmailTabButtons() {
-    console.log('Configurando botões da aba de e-mail...');
-    
-    // Tentar encontrar os botões de várias formas
-    const emailTab = document.getElementById('emailTab');
-    if (!emailTab) {
-        console.warn('Aba de e-mail não encontrada');
-        return;
-    }
-    
-    // Procurar botões dentro da aba de e-mail
-    const saveBtn = emailTab.querySelector('button.btn-primary');
-    const testBtn = emailTab.querySelector('button.btn-secondary');
-    
-    if (saveBtn) {
-        console.log('Botão Salvar encontrado');
-        // Remover onclick antigo e adicionar novo listener
-        saveBtn.removeAttribute('onclick');
-        saveBtn.onclick = null;
-        
-        // Remover todos os event listeners anteriores clonando o botão
-        const newSaveBtn = saveBtn.cloneNode(true);
-        saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
-        
-        // Adicionar novo event listener
-        newSaveBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('✅ Botão Salvar clicado via event listener');
-            saveEmailSettings();
-        });
-        
-        // Também definir onclick como fallback
-        newSaveBtn.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('✅ Botão Salvar clicado via onclick');
-            saveEmailSettings();
-        };
-        
-        console.log('✅ Botão Salvar configurado');
-    } else {
-        console.warn('❌ Botão Salvar não encontrado na aba de e-mail');
-    }
-    
-    if (testBtn) {
-        console.log('Botão Testar encontrado');
-        // Remover onclick antigo e adicionar novo listener
-        testBtn.removeAttribute('onclick');
-        testBtn.onclick = null;
-        
-        // Remover todos os event listeners anteriores clonando o botão
-        const newTestBtn = testBtn.cloneNode(true);
-        testBtn.parentNode.replaceChild(newTestBtn, testBtn);
-        
-        // Adicionar novo event listener
-        newTestBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('✅ Botão Testar clicado via event listener');
-            testEmailSettings();
-        });
-        
-        // Também definir onclick como fallback
-        newTestBtn.onclick = function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('✅ Botão Testar clicado via onclick');
-            testEmailSettings();
-        };
-        
-        console.log('✅ Botão Testar configurado');
-    } else {
-        console.warn('❌ Botão Testar não encontrado na aba de e-mail');
-    }
-}
-
-// Função para carregar aba de usuários
-function loadUsersTab() {
+// Função para carregar aba de formulários
+function loadFormsTab() {
     const usersList = document.getElementById('usersList');
     if (!usersList) return;
     
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     
     if (users.length === 0) {
-        usersList.innerHTML = `
+    usersList.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-users"></i>
                 <p>Nenhum usuário cadastrado ainda.</p>
@@ -5225,23 +5849,10 @@ function loadUsersTab() {
                 <button class="btn-danger" onclick="deleteUser(${user.id})" title="Excluir">
                     <i class="fas fa-trash"></i>
                 </button>
-            </div>
-        `;
+        </div>
+    `;
         usersList.appendChild(userItem);
     });
-}
-
-// Função auxiliar para obter nome do perfil
-function getUserRoleName(role) {
-    const roles = {
-        'admin': 'Administrador',
-        'Admin': 'Administrador',
-        'agent': 'Agente',
-        'Agente': 'Agente',
-        'viewer': 'Visualizador',
-        'Visualizador': 'Visualizador'
-    };
-    return roles[role] || role;
 }
 
 // Função para carregar aba de formulários
@@ -5270,11 +5881,11 @@ function loadFormsTab() {
     forms.forEach(form => {
         totalFields += form.fields ? form.fields.length : 0;
         if (form.fields) {
-            form.fields.forEach(field => {
+        form.fields.forEach(field => {
                 if (field.type === 'tree' || field.type === 'tree-select' || field.type === 'tree-sequential') {
-                    totalTrees++;
-                }
-            });
+                totalTrees++;
+            }
+        });
         }
     });
     
@@ -5334,7 +5945,7 @@ function loadWorkflowsTab() {
     if (workflowExecutionsEl) workflowExecutionsEl.textContent = '0'; // TODO: Implementar contador
     
     if (workflows.length === 0) {
-        workflowsList.innerHTML = `
+    workflowsList.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-project-diagram"></i>
                 <p>Nenhum workflow criado ainda.</p>
@@ -5363,8 +5974,8 @@ function loadWorkflowsTab() {
                 <button class="btn-danger" onclick="deleteWorkflow(${workflow.id})">
                     <i class="fas fa-trash"></i>
                 </button>
-            </div>
-        `;
+        </div>
+    `;
         workflowsList.appendChild(workflowItem);
     });
 }
@@ -5396,7 +6007,7 @@ function loadBackupTab() {
     }
     
     if (backups.length === 0) {
-        backupHistory.innerHTML = `
+    backupHistory.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-database"></i>
                 <p>Nenhum backup criado ainda.</p>
@@ -5424,8 +6035,8 @@ function loadBackupTab() {
                 <button class="btn-danger" onclick="deleteBackup(${backup.id})">
                     <i class="fas fa-trash"></i>
                 </button>
-            </div>
-        `;
+        </div>
+    `;
         backupHistory.appendChild(backupItem);
     });
 }
@@ -5438,7 +6049,7 @@ function loadAuditTab() {
     const auditLogs = JSON.parse(localStorage.getItem('auditLogs') || '[]');
     
     if (auditLogs.length === 0) {
-        auditTable.innerHTML = `
+    auditTable.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-clipboard-list"></i>
                 <p>Nenhum log de auditoria registrado ainda.</p>
@@ -5471,7 +6082,7 @@ function loadAuditTab() {
                 <td>${log.user || 'Sistema'}</td>
                 <td>${log.action}</td>
                 <td>${log.details || '-'}</td>
-            </tr>
+                </tr>
         `;
     });
     
@@ -5501,7 +6112,7 @@ function loadApiTab() {
     
     if (apiKeysList) {
         if (apiKeys.length === 0) {
-            apiKeysList.innerHTML = `
+        apiKeysList.innerHTML = `
                 <div class="no-data">
                     <i class="fas fa-key"></i>
                     <p>Nenhuma chave de API criada ainda.</p>
@@ -5515,22 +6126,22 @@ function loadApiTab() {
                 keyItem.className = 'api-key-item';
                 const maskedKey = key.key.substring(0, 8) + '...' + key.key.substring(key.key.length - 6);
                 keyItem.innerHTML = `
-                    <div class="api-key-info">
+                <div class="api-key-info">
                         <h4>${key.name}</h4>
                         <p>${maskedKey}</p>
                         <span class="api-key-status ${key.active ? 'active' : 'inactive'}">
                             ${key.active ? 'Ativa' : 'Inativa'}
                         </span>
-                    </div>
-                    <div class="api-key-actions">
+                </div>
+                <div class="api-key-actions">
                         <button class="btn-secondary" onclick="regenerateApiKey(${key.id})">
-                            <i class="fas fa-sync"></i>
-                        </button>
+                        <i class="fas fa-sync"></i>
+                    </button>
                         <button class="btn-danger" onclick="deleteApiKey(${key.id})">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                `;
+                        <i class="fas fa-trash"></i>
+                    </button>
+            </div>
+        `;
                 apiKeysList.appendChild(keyItem);
             });
         }
@@ -5561,8 +6172,8 @@ function loadApiTab() {
                     <button class="btn-primary" onclick="testEndpoint('${endpoint.method}', '${endpoint.path}')">
                         <i class="fas fa-play"></i> Testar
                     </button>
-                </div>
-            `;
+            </div>
+        `;
             apiEndpointsList.appendChild(endpointItem);
         });
     }
@@ -5600,7 +6211,7 @@ function loadFieldsTab() {
     const fields = JSON.parse(localStorage.getItem('customFields') || '[]');
     
     if (fields.length === 0) {
-        customFields.innerHTML = `
+    customFields.innerHTML = `
             <div class="no-data">
                 <i class="fas fa-list"></i>
                 <p>Nenhum campo personalizado criado ainda.</p>
@@ -5899,7 +6510,7 @@ function saveForm(formNameId, formDescriptionId) {
     
     // Aguardar um pouco antes de recarregar para garantir que o modal foi fechado
     setTimeout(() => {
-        loadFormsTab();
+    loadFormsTab();
         const msg = 'Formulário criado com sucesso!';
         if (typeof showNotification === 'function') {
             showNotification(msg, 'success');
@@ -6170,14 +6781,14 @@ function addFieldToEditForm() {
     const treeConfigGroup = document.getElementById(`treeConfigGroup-${timestamp}`);
     
     if (fieldTypeSelect) {
-        fieldTypeSelect.addEventListener('change', function() {
+    fieldTypeSelect.addEventListener('change', function() {
             if (this.value === 'select' || this.value === 'radio' || this.value === 'checkbox') {
                 if (optionsGroup) optionsGroup.style.display = 'block';
                 if (treeConfigGroup) treeConfigGroup.style.display = 'none';
             } else if (this.value === 'tree-sequential') {
                 if (optionsGroup) optionsGroup.style.display = 'none';
                 if (treeConfigGroup) treeConfigGroup.style.display = 'block';
-            } else {
+        } else {
                 if (optionsGroup) optionsGroup.style.display = 'none';
                 if (treeConfigGroup) treeConfigGroup.style.display = 'none';
             }
@@ -6287,8 +6898,8 @@ function saveNewField(fieldLabelId, fieldTypeId, fieldRequiredId, fieldOptionsId
     const success = addFieldToCurrentForm(newField);
     
     if (success) {
-        closeAddFieldModal();
-        refreshEditFormFields();
+    closeAddFieldModal();
+    refreshEditFormFields();
         showNotification('Campo adicionado com sucesso!', 'success');
     } else {
         showNotification('Erro ao adicionar campo. Certifique-se de que um formulário está sendo editado.', 'error');
@@ -6310,12 +6921,12 @@ function addFieldToCurrentForm(field) {
         return false;
     }
     
-    if (!forms[formIndex].fields) {
-        forms[formIndex].fields = [];
-    }
+            if (!forms[formIndex].fields) {
+                forms[formIndex].fields = [];
+            }
     
-    forms[formIndex].fields.push(field);
-    localStorage.setItem('forms', JSON.stringify(forms));
+            forms[formIndex].fields.push(field);
+            localStorage.setItem('forms', JSON.stringify(forms));
     
     return true;
 }
@@ -6345,7 +6956,7 @@ function refreshEditFormFields() {
     const editFormIdNum = typeof editFormId === 'string' ? parseInt(editFormId) : editFormId;
     const form = forms.find(f => f.id === editFormIdNum || f.id == editFormId);
     
-    if (form) {
+        if (form) {
         fieldsList.innerHTML = renderFormFieldsForEdit(form.fields || []);
     } else {
         console.warn('Formulário não encontrado:', editFormId);
@@ -6648,10 +7259,10 @@ function removeFormField(fieldIndex) {
             return;
         }
         
-        forms[formIndex].fields.splice(fieldIndex, 1);
-        localStorage.setItem('forms', JSON.stringify(forms));
-        refreshEditFormFields();
-        showNotification('Campo removido com sucesso!', 'success');
+                forms[formIndex].fields.splice(fieldIndex, 1);
+                localStorage.setItem('forms', JSON.stringify(forms));
+                refreshEditFormFields();
+                showNotification('Campo removido com sucesso!', 'success');
     }
 }
 
@@ -6814,8 +7425,8 @@ function createFullBackup() {
         backups.push(backup);
         localStorage.setItem('backups', JSON.stringify(backups));
         
-        showNotification('Backup completo criado com sucesso!', 'success');
-        loadBackupTab();
+    showNotification('Backup completo criado com sucesso!', 'success');
+    loadBackupTab();
     } catch (error) {
         console.error('Erro ao criar backup:', error);
         showNotification('Erro ao criar backup!', 'error');
@@ -6848,8 +7459,8 @@ function createIncrementalBackup() {
         backups.push(backup);
         localStorage.setItem('backups', JSON.stringify(backups));
         
-        showNotification('Backup incremental criado com sucesso!', 'success');
-        loadBackupTab();
+    showNotification('Backup incremental criado com sucesso!', 'success');
+    loadBackupTab();
     } catch (error) {
         console.error('Erro ao criar backup incremental:', error);
         showNotification('Erro ao criar backup incremental!', 'error');
@@ -7043,8 +7654,8 @@ function clearOldLogs() {
     
     const removedCount = auditLogs.length - filteredLogs.length;
     showNotification(`${removedCount} log(s) antigo(s) removido(s)!`, 'success');
-    loadAuditTab();
-}
+        loadAuditTab();
+    }
 
 // Função auxiliar para adicionar log de auditoria
 function addAuditLog(action, details, user) {
@@ -7247,8 +7858,8 @@ function deleteApiKey(keyId) {
     
     localStorage.setItem('apiKeys', JSON.stringify(filteredKeys));
     
-    showNotification('Chave de API excluída com sucesso!', 'success');
-    loadApiTab();
+        showNotification('Chave de API excluída com sucesso!', 'success');
+        loadApiTab();
     if (key && typeof addAuditLog === 'function') {
         addAuditLog('API Key Deleted', `Chave de API excluída: ${key.name}`, 'Sistema');
     }
@@ -7295,15 +7906,14 @@ function deleteField(fieldId) {
     deleteCustomField(fieldId);
 }
 
-// Funções para usuários
-function addUser() {
-    console.log('Adicionando novo usuário...');
-    
-    // Criar modal para adicionar usuário
-    const modal = document.createElement('div');
-    modal.id = 'addUserModal';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
+// Função para carregar relatórios
+function loadReports() {
+    console.log('Carregando relatórios...');
+}
+
+// Função para carregar chat
+function loadChat() {
+    console.log('=== loadChat chamada ===');
     
     modal.innerHTML = `
         <div class="modal-content">
@@ -7760,23 +8370,49 @@ function testEmailSettings() {
         return;
     }
     
-    const testEmail = emailSettings.smtpUser;
+    const testEmail = prompt('Digite o e-mail para enviar o teste:', emailSettings.smtpUser || '');
+    if (!testEmail) {
+        return;
+    }
     
-    // Simular envio de e-mail de teste
-    sendEmailViaSMTP({
-        to: testEmail,
-        subject: 'Teste de Configuração - Velodesk',
-        html: `
-            <h2>Teste de Configuração de E-mail</h2>
-            <p>Este é um e-mail de teste do sistema Velodesk.</p>
-            <p>Se você recebeu este e-mail, suas configurações SMTP estão funcionando corretamente!</p>
-            <p><strong>Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}</p>
-        `
-    }).then(() => {
+    // Validar formato do e-mail
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(testEmail)) {
+        showNotification('Por favor, digite um e-mail válido!', 'error');
+        return;
+    }
+    
+    showNotification('Enviando e-mail de teste...', 'info');
+    
+    // URL do backend
+    const backendUrl = 'http://localhost:3000';
+    
+    // Fazer requisição para backend
+    fetch(`${backendUrl}/api/email/test`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            emailSettings: emailSettings,
+            testEmail: testEmail
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.error || 'Erro ao enviar e-mail de teste');
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('✅ E-mail de teste enviado:', data);
         showNotification('E-mail de teste enviado com sucesso! Verifique sua caixa de entrada.', 'success');
-    }).catch((error) => {
-        console.error('Erro ao enviar e-mail:', error);
-        showNotification('Erro ao enviar e-mail de teste. Verifique as configurações SMTP.', 'error');
+    })
+    .catch((error) => {
+        console.error('❌ Erro ao enviar e-mail de teste:', error);
+        showNotification(`Erro ao enviar e-mail de teste: ${error.message}`, 'error');
     });
 }
 
@@ -7851,36 +8487,22 @@ function sendPasswordSetupEmail(userEmail, userName, token) {
     });
 }
 
-// Função para enviar e-mail via SMTP (simulação - em produção, usar backend)
+// Função para enviar e-mail via SMTP (usando backend real com Nodemailer)
 function sendEmailViaSMTP(emailData) {
     return new Promise((resolve, reject) => {
         const emailSettings = JSON.parse(localStorage.getItem('emailSettings') || '{}');
         
-        // Em produção, isso deve ser feito no backend
-        // Por enquanto, vamos simular o envio e salvar no localStorage para demonstração
-        const emailLog = {
-            id: Date.now(),
-            to: emailData.to,
-            subject: emailData.subject,
-            html: emailData.html,
-            sentAt: new Date().toISOString(),
-            status: 'sent'
-        };
+        // Verificar se as configurações SMTP estão disponíveis
+        if (!emailSettings.smtpHost || !emailSettings.smtpUser) {
+            reject(new Error('Configurações SMTP não encontradas'));
+            return;
+        }
         
-        // Salvar log de e-mails enviados
-        const emailLogs = JSON.parse(localStorage.getItem('emailLogs') || '[]');
-        emailLogs.push(emailLog);
-        localStorage.setItem('emailLogs', JSON.stringify(emailLogs));
+        // URL do backend (ajustar conforme necessário)
+        const backendUrl = 'http://localhost:3000'; // Ou usar variável de ambiente
         
-        // Simular delay de envio
-        setTimeout(() => {
-            console.log('E-mail enviado (simulado):', emailData.to);
-            resolve(emailLog);
-        }, 1000);
-        
-        // Em produção, fazer requisição para backend:
-        /*
-        fetch('/api/send-email', {
+        // Fazer requisição para backend
+        fetch(`${backendUrl}/api/email/send`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -7890,10 +8512,54 @@ function sendEmailViaSMTP(emailData) {
                 emailData: emailData
             })
         })
-        .then(response => response.json())
-        .then(data => resolve(data))
-        .catch(error => reject(error));
-        */
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || 'Erro ao enviar e-mail');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('✅ E-mail enviado com sucesso:', data);
+            
+            // Salvar log de e-mails enviados
+            const emailLog = {
+                id: Date.now(),
+                to: emailData.to,
+                subject: emailData.subject,
+                html: emailData.html,
+                sentAt: new Date().toISOString(),
+                status: 'sent',
+                messageId: data.messageId
+            };
+            
+            const emailLogs = JSON.parse(localStorage.getItem('emailLogs') || '[]');
+            emailLogs.push(emailLog);
+            localStorage.setItem('emailLogs', JSON.stringify(emailLogs));
+            
+            resolve(data);
+        })
+        .catch(error => {
+            console.error('❌ Erro ao enviar e-mail:', error);
+            
+            // Salvar log de erro
+            const emailLog = {
+                id: Date.now(),
+                to: emailData.to,
+                subject: emailData.subject,
+                html: emailData.html,
+                sentAt: new Date().toISOString(),
+                status: 'error',
+                error: error.message
+            };
+            
+            const emailLogs = JSON.parse(localStorage.getItem('emailLogs') || '[]');
+            emailLogs.push(emailLog);
+            localStorage.setItem('emailLogs', JSON.stringify(emailLogs));
+            
+            reject(error);
+        });
     });
 }
 
@@ -8942,20 +9608,31 @@ function logout() {
     
     // Confirmar logout
     if (confirm('Tem certeza que deseja sair?')) {
-        localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('isLoggedIn');
         localStorage.removeItem('currentUser');
-        const loginScreen = document.getElementById('loginScreen');
-        const mainApp = document.getElementById('mainApp');
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+    
+    if (loginScreen) {
+        loginScreen.style.display = 'flex';
+    }
+    
+    if (mainApp) {
+        mainApp.style.display = 'none';
+    }
         
-        if (loginScreen) {
-            loginScreen.style.display = 'flex';
+        // Limpar dados do Google Sign-In se necessário
+        if (window.google && window.google.accounts) {
+            window.google.accounts.id.disableAutoSelect();
         }
         
-        if (mainApp) {
-            mainApp.style.display = 'none';
-        }
-        
-        showNotification('Logout realizado com sucesso!', 'success');
+        // Limpar campos de login
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        if (emailInput) emailInput.value = '';
+        if (passwordInput) passwordInput.value = '';
+    
+    showNotification('Logout realizado com sucesso!', 'success');
     }
 }
 
@@ -8963,21 +9640,65 @@ function logout() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Sistema Velodesk inicializado!');
     
-    // Login automático - sempre entrar sem validação
-    // Executar imediatamente para garantir que funcione
+    // Garantir que o botão Google apareça imediatamente (mesmo sem Client ID configurado)
+    setTimeout(() => {
+        setupGoogleSignIn(); // Chamar diretamente para garantir que o botão apareça
+    }, 100);
+    
+    // Inicializar Google Sign-In completo
+    setTimeout(() => {
+        initializeGoogleSignIn();
+    }, 500);
+    
+    // Verificar se já está logado
+    const isLoggedIn = localStorage.getItem('isLoggedIn');
     const loginScreen = document.getElementById('loginScreen');
     const mainApp = document.getElementById('mainApp');
     
+    if (isLoggedIn === 'true') {
+        // Usuário já está logado, mostrar aplicação
     if (loginScreen) {
         loginScreen.style.display = 'none';
     }
-    
     if (mainApp) {
         mainApp.style.display = 'grid';
     }
     
-    // Marcar como logado
-    localStorage.setItem('isLoggedIn', 'true');
+        // Carregar dados do usuário se existirem
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        if (currentUser.name) {
+            const profileBtn = document.getElementById('profileBtn');
+            if (profileBtn) {
+                const span = profileBtn.querySelector('span');
+                if (span) {
+                    span.textContent = currentUser.name;
+                }
+            }
+            if (currentUser.picture) {
+                const profileImg = document.getElementById('profileImg');
+                const profileIcon = document.getElementById('profileIcon');
+                if (profileImg) {
+                    profileImg.src = currentUser.picture;
+                    profileImg.style.display = 'block';
+                    if (profileIcon) {
+                        profileIcon.style.display = 'none';
+                    }
+                }
+            }
+        }
+    } else {
+        // Usuário não está logado, mostrar tela de login
+        if (loginScreen) {
+            loginScreen.style.display = 'flex';
+        }
+        if (mainApp) {
+            mainApp.style.display = 'none';
+        }
+        // Inicializar Google Sign-In quando a tela de login for exibida
+        setTimeout(() => {
+            initializeGoogleSignIn();
+        }, 500);
+    }
     
     // Garantir que todas as páginas comecem sem a classe ticket-tab-open
     document.querySelectorAll('.page').forEach(page => {
@@ -13637,7 +14358,7 @@ function createTicketFromWhatsAppConversation(conversationText) {
         if (foundTicket && typeof createTicketTab === 'function') {
             // Usar createTicketTab diretamente para garantir que funciona
             createTicketTab(foundTicket, foundBox);
-            showNotification('Ticket criado com sucesso! A conversa foi adicionada na observação interna.', 'success');
+    showNotification('Ticket criado com sucesso! A conversa foi adicionada na observação interna.', 'success');
         } else if (typeof openTicket === 'function') {
             // Fallback para openTicket
             openTicket(ticketId);
@@ -14420,16 +15141,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSidebarToggleVisibility();
     }, 500);
     
-    // Carregar configuração da 55pbx
-    loadPbxConfig();
-    
-    // Inicializar discador arrastável
-    setTimeout(() => {
-        initDraggableDialer();
-    }, 100);
-    
-    // Verificar token de criação de senha na URL
-    checkPasswordSetupToken();
 });
 
 // ========== FUNÇÕES AUXILIARES PARA TREE-SEQUENTIAL NOS MODAIS ==========

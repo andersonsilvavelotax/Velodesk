@@ -4587,6 +4587,263 @@ body {
     background: #c82333;
 }
 
+.file-item-image {
+    border-left: 3px solid #28a745;
+}
+
+.file-item .btn-preview {
+    background: var(--primary-blue);
+    color: var(--white);
+    border: none;
+    border-radius: 3px;
+    padding: 0.2rem 0.4rem;
+    cursor: pointer;
+    font-size: 0.7rem;
+    margin-right: 0.25rem;
+}
+
+.file-item .btn-preview:hover {
+    background: #0056b3;
+}
+
+.attachment-item-image {
+    border-left: 3px solid #28a745;
+}
+
+/* Modal de preview de imagem */
+.image-preview-modal {
+    max-width: 90vw;
+    max-height: 90vh;
+}
+
+.image-preview-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+}
+
+.image-preview-body img {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-bottom: 1rem;
+}
+
+.image-preview-info {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    text-align: left;
+    width: 100%;
+}
+
+.image-preview-info p {
+    margin: 0.5rem 0;
+    color: var(--dark-gray);
+}
+
+/* Estilos para anexos de tickets */
+.ticket-attachments-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e9ecef;
+}
+
+.attachments-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: var(--dark-gray);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.attachments-label i {
+    color: var(--primary-blue);
+}
+
+.ticket-attachments-section .file-upload-area {
+    margin-top: 0.5rem;
+    padding: 1.5rem;
+    min-height: 100px;
+}
+
+.ticket-attachments-section .file-upload-area small {
+    display: block;
+    margin-top: 0.5rem;
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.ticket-attachments-display {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.ticket-attachments-display h4 {
+    margin: 0 0 1rem 0;
+    color: var(--primary-blue);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.attachments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.attachment-item:hover {
+    border-color: var(--primary-blue);
+    box-shadow: 0 2px 4px rgba(0, 0, 88, 0.1);
+}
+
+.attachment-item i.fa-file {
+    color: var(--primary-blue);
+    font-size: 1.2rem;
+}
+
+.attachment-name {
+    flex: 1;
+    font-weight: 500;
+    color: var(--dark-gray);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attachment-size {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.btn-icon-small {
+    background: transparent;
+    border: none;
+    color: var(--primary-blue);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+}
+
+.btn-icon-small:hover {
+    background: rgba(0, 0, 88, 0.1);
+}
+
+.btn-icon-small.btn-danger {
+    color: var(--danger);
+}
+
+.btn-icon-small.btn-danger:hover {
+    background: rgba(220, 53, 69, 0.1);
+}
+
+/* Estilos para anexos de imagem */
+.attachment-item.attachment-image {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0;
+    overflow: hidden;
+}
+
+.attachment-preview {
+    width: 100%;
+    max-height: 200px;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.attachment-preview img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    transition: transform 0.2s ease;
+}
+
+.attachment-preview:hover img {
+    transform: scale(1.05);
+}
+
+.attachment-info {
+    flex: 1;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.attachment-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-top: 1px solid #e9ecef;
+    width: 100%;
+    justify-content: flex-end;
+}
+
+/* Modal de preview de imagem */
+.attachment-preview-modal {
+    max-width: 90vw;
+    max-height: 90vh;
+}
+
+.attachment-preview-body {
+    text-align: center;
+    padding: 1rem;
+    overflow: auto;
+    max-height: calc(90vh - 150px);
+}
+
+.attachment-preview-body img {
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-bottom: 1rem;
+}
+
+.attachment-preview-info {
+    text-align: left;
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.attachment-preview-info p {
+    margin: 0.5rem 0;
+    color: var(--dark-gray);
+}
+
+.attachment-preview-info strong {
+    color: var(--primary-blue);
+}
+
 /* Upload para anotações internas */
 .internal-upload .file-upload-area {
     background: #fffbf0;
@@ -9247,329 +9504,6 @@ body {
 #optionsGroup textarea {
     font-family: monospace;
     font-size: 12px;
-}
-
-/* ========== DISCADOR FLUTUANTE 55PBX ========== */
-.floating-dialer {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 10000;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    transition: none;
-}
-
-.floating-dialer.dragging {
-    transition: none;
-}
-
-.dialer-toggle {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: move;
-    box-shadow: 0 3px 10px rgba(40, 167, 69, 0.3);
-    transition: all 0.2s ease;
-    color: white;
-    font-size: 20px;
-    position: relative;
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-}
-
-.dialer-toggle:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
-}
-
-.dialer-toggle:active {
-    transform: scale(0.95);
-}
-
-.dialer-toggle.dragging {
-    cursor: grabbing !important;
-    opacity: 0.8;
-    transform: scale(1.1);
-    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.5);
-}
-
-.dialer-drag-handle {
-    position: absolute;
-    bottom: 3px;
-    right: 3px;
-    font-size: 9px;
-    opacity: 0.6;
-    pointer-events: none;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 2px;
-    padding: 1px 2px;
-}
-
-.floating-dialer.dragging .dialer-toggle {
-    cursor: grabbing !important;
-}
-
-.dialer-container {
-    position: absolute;
-    bottom: 70px;
-    right: 0;
-    width: 280px;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    overflow: hidden;
-    animation: slideUp 0.2s ease-out;
-    border: 1px solid #e9ecef;
-}
-
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.dialer-header {
-    background: linear-gradient(135deg, #000058 0%, #1a1a7a 100%);
-    color: white;
-    padding: 10px 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.dialer-header h3 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.dialer-header-actions {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-}
-
-.dialer-header-btn,
-.dialer-close {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 13px;
-    cursor: pointer;
-    padding: 5px 6px;
-    transition: all 0.2s;
-    border-radius: 4px;
-    opacity: 0.9;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 28px;
-    height: 28px;
-}
-
-.dialer-header-btn:hover,
-.dialer-close:hover {
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.15);
-    transform: scale(1.1);
-}
-
-.dialer-close:hover {
-    transform: rotate(90deg) scale(1.1);
-}
-
-.dialer-body {
-    padding: 12px;
-}
-
-.dialer-display {
-    margin-bottom: 12px;
-}
-
-.dialer-number-input {
-    width: 100%;
-    padding: 10px;
-    font-size: 18px;
-    text-align: center;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    background: #f8f9fa;
-    color: #000058;
-    font-weight: 500;
-    letter-spacing: 1px;
-}
-
-.dialer-number-input:focus {
-    outline: none;
-    border-color: #000058;
-    box-shadow: 0 0 0 2px rgba(0, 0, 58, 0.1);
-}
-
-.dialer-keypad {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    margin-bottom: 10px;
-}
-
-.dialer-key {
-    aspect-ratio: 1;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    background: white;
-    font-size: 18px;
-    font-weight: 500;
-    color: #000058;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    padding: 8px 4px;
-}
-
-.dialer-key:hover {
-    background: #f8f9fa;
-    border-color: #000058;
-    transform: scale(1.03);
-}
-
-.dialer-key:active {
-    transform: scale(0.97);
-    background: #e9ecef;
-}
-
-.dialer-letters {
-    font-size: 8px;
-    font-weight: 400;
-    color: #6c757d;
-    margin-top: 1px;
-    letter-spacing: 0.5px;
-}
-
-.dialer-actions {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 8px;
-}
-
-.dialer-action-btn {
-    flex: 1;
-    padding: 8px;
-    border: none;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-}
-
-.dialer-call {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    color: white;
-    flex: 2;
-}
-
-.dialer-call:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
-}
-
-.dialer-call:active {
-    transform: translateY(0);
-}
-
-.dialer-call.calling {
-    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.7;
-    }
-}
-
-.dialer-backspace {
-    background: #ffc107;
-    color: #000058;
-}
-
-.dialer-backspace:hover {
-    background: #e0a800;
-}
-
-.dialer-clear {
-    background: #dc3545;
-    color: white;
-}
-
-.dialer-clear:hover {
-    background: #c82333;
-}
-
-.dialer-status {
-    padding: 6px;
-    text-align: center;
-    background: #f8f9fa;
-    border-radius: 6px;
-    font-size: 11px;
-    color: #6c757d;
-}
-
-.dialer-status.calling {
-    background: #fff3cd;
-    color: #856404;
-}
-
-.dialer-status.success {
-    background: #d4edda;
-    color: #155724;
-}
-
-.dialer-status.error {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-.status-text {
-    display: block;
-}
-
-/* Responsividade do discador */
-@media (max-width: 768px) {
-    .dialer-container {
-        width: 100%;
-        max-width: 280px;
-        right: 10px;
-        bottom: 70px;
-    }
-    
-    .dialer-toggle {
-        width: 48px;
-        height: 48px;
-        font-size: 18px;
-    }
 }
 
 /* Estilos para campos de formulário em tickets */
