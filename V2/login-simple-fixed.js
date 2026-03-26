@@ -594,7 +594,8 @@ function createTicketTab(ticket, box) {
     
     // Mostrar barra de abas e conteúdo, ocultar layout de lista
     tabsBar.style.display = 'flex';
-    tabsContent.style.display = 'block';
+    tabsContent.style.display = 'flex';
+    tabsContent.style.flexDirection = 'column';
     if (ticketsLayout) ticketsLayout.style.display = 'none';
     
     const tabItem = document.createElement('div');
@@ -711,6 +712,7 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                                 <span class="meta-label">Última Atualização:</span>
                                 <span class="meta-value">${new Date(ticket.updatedAt || ticket.createdAt).toLocaleString()}</span>
                             </div>
+                            ${getTabulacaoMetaHtml(ticket)}
                         </div>
                     </div>
 
@@ -720,40 +722,43 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                         <p>${ticket.description || 'Nenhuma descrição disponível'}</p>
                     </div>
 
-                    <!-- Timeline do Ticket -->
-                    <div class="ticket-timeline">
-                        <h4>Histórico de Atendimento</h4>
+                    <!-- Timeline do Ticket (layout estilo Octadesk) -->
+                    <div class="ticket-timeline ticket-history-octa">
+                        <h4>Histórico de atendimento</h4>
                         <div class="timeline-container" id="timeline-${ticket.id}">
                             ${generateTimelineHTML(ticket)}
                         </div>
                     </div>
 
                     <!-- Área de Resposta -->
-                    <div class="ticket-response">
-                        <div class="response-tabs">
-                            <button class="response-tab active" data-tab="public-${ticket.id}" onclick="switchResponseTabInTab('${ticket.id}', 'public')">Resposta Pública</button>
-                            <button class="response-tab" data-tab="internal-${ticket.id}" onclick="switchResponseTabInTab('${ticket.id}', 'internal')">Anotação Interna</button>
-                        </div>
-                        
-                        <div class="response-content">
-                            <div class="response-tab-content active" id="public-${ticket.id}">
-                                <div class="response-form">
-                                    <textarea class="response-textarea" id="publicResponse-${ticket.id}" placeholder="Digite sua resposta..." rows="4"></textarea>
-                                    <div class="response-actions">
-                                        <button type="button" class="btn-secondary" onclick="openAIChatbot()">
-                                            <i class="fas fa-robot"></i> Assistente IA
-                                        </button>
-                                    </div>
+                    <div class="ticket-response octa-comment-panel">
+                        <div class="octa-comment-panel-row">
+                            <div class="octa-panel-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
+                            <div class="octa-panel-box">
+                                <div class="response-tabs octa-nav-tabs">
+                                    <button type="button" class="response-tab octa-nav-tab octa-tab-public active" data-tab="public-${ticket.id}" onclick="switchResponseTabInTab('${ticket.id}', 'public')"><i class="fas fa-envelope"></i> Resposta pública</button>
+                                    <button type="button" class="response-tab octa-nav-tab octa-tab-internal" data-tab="internal-${ticket.id}" onclick="switchResponseTabInTab('${ticket.id}', 'internal')"><i class="fas fa-edit"></i> Anotação interna</button>
                                 </div>
-                            </div>
-                            
-                            <div class="response-tab-content" id="internal-${ticket.id}">
-                                <div class="response-form internal-form">
-                                    <div class="internal-note-header">
-                                        <i class="fas fa-lock"></i>
-                                        <span>Anotação Interna - Não será enviada ao cliente</span>
+                                <div class="response-content octa-response-panel-body">
+                                    <div class="response-tab-content active" id="public-${ticket.id}">
+                                        <div class="response-form">
+                                            <textarea class="response-textarea" id="publicResponse-${ticket.id}" placeholder="Digite sua resposta ao cliente..." rows="5"></textarea>
+                                            <div class="response-actions">
+                                                <button type="button" class="btn-secondary" onclick="openAIChatbot()">
+                                                    <i class="fas fa-robot"></i> Assistente IA
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <textarea class="response-textarea internal-textarea" id="internalResponse-${ticket.id}" placeholder="Digite uma anotação interna..." rows="4"></textarea>
+                                    <div class="response-tab-content" id="internal-${ticket.id}">
+                                        <div class="response-form internal-form">
+                                            <div class="internal-note-header">
+                                                <i class="fas fa-lock"></i>
+                                                <span>Anotação interna — não será enviada ao cliente</span>
+                                            </div>
+                                            <textarea class="response-textarea internal-textarea" id="internalResponse-${ticket.id}" placeholder="Digite uma anotação interna..." rows="5"></textarea>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1088,28 +1093,10 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
                 newTicket.clientName = clientNameInput.value.trim();
             }
             
-            // Coletar dados do formulário personalizado se existir
-            const formFieldsContainer = document.getElementById(`ticketFormFields-${ticketId}`);
-            if (formFieldsContainer && newTicket.formId) {
-                const formFields = formFieldsContainer.querySelectorAll('.ticket-form-field');
-                formFields.forEach(field => {
-                    const fieldId = field.getAttribute('data-field-id');
-                    const fieldType = field.querySelector('input, select, textarea')?.type || 
-                                     field.querySelector('select') ? 'select' : 'text';
-                    
-                    let value = '';
-                    if (fieldType === 'checkbox') {
-                        value = field.querySelector('input[type="checkbox"]')?.checked || false;
-                    } else if (fieldType === 'select') {
-                        value = field.querySelector('select')?.value || '';
-                    } else {
-                        value = field.querySelector('input, textarea')?.value || '';
-                    }
-                    
-                    if (value !== '') {
-                        newTicket.formData[fieldId] = value;
-                    }
-                });
+            // Coletar dados do formulário personalizado se existir (inclui tabulação em árvore)
+            const formFieldsContainerNew = document.getElementById(`ticketFormFields-${ticketId}`);
+            if (formFieldsContainerNew && newTicket.formId) {
+                mergeTicketFormDataFromContainer(formFieldsContainerNew, newTicket);
             }
             
             // Adicionar ticket à caixa "novos"
@@ -1135,6 +1122,7 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
             showNotification('Ticket não encontrado!', 'error');
             return;
         }
+
     }
     
     // Obter resposta do usuário
@@ -1152,31 +1140,10 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
         internalNote = internalTextarea.value.trim();
     }
     
-    // Coletar dados dos formulários personalizados
+    // Coletar dados dos formulários personalizados (inclui tabulação / árvore completa)
     const formFieldsContainer = document.getElementById(`ticketFormFields-${ticketId}`);
     if (formFieldsContainer && foundTicket.formId) {
-        const formFields = formFieldsContainer.querySelectorAll('.ticket-form-field');
-        formFields.forEach(field => {
-            const fieldId = field.getAttribute('data-field-id');
-            const fieldType = field.querySelector('input, select, textarea')?.type || 
-                             field.querySelector('select') ? 'select' : 'text';
-            
-            let value = '';
-            if (fieldType === 'checkbox') {
-                value = field.querySelector('input[type="checkbox"]')?.checked || false;
-            } else if (fieldType === 'select') {
-                value = field.querySelector('select')?.value || '';
-            } else {
-                value = field.querySelector('input, textarea')?.value || '';
-            }
-            
-            if (value !== '') {
-                if (!foundTicket.formData) {
-                    foundTicket.formData = {};
-                }
-                foundTicket.formData[fieldId] = value;
-            }
-        });
+        mergeTicketFormDataFromContainer(formFieldsContainer, foundTicket);
     }
     
     // Coletar dados do cliente
@@ -1228,6 +1195,7 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
             id: Date.now(),
             text: responseText,
             type: 'response',
+            sender: 'me',
             timestamp: new Date().toISOString(),
             status: newStatus
         });
@@ -1463,6 +1431,7 @@ function createTicketModal(ticket, box) {
                                     <span class="meta-label">Última Atualização:</span>
                                     <span class="meta-value">${new Date(ticket.updatedAt || ticket.createdAt).toLocaleString()}</span>
                                 </div>
+                                ${getTabulacaoMetaHtml(ticket)}
                             </div>
                         </div>
 
@@ -1472,40 +1441,43 @@ function createTicketModal(ticket, box) {
                             <p>${ticket.description || 'Nenhuma descrição disponível'}</p>
                         </div>
 
-                        <!-- Timeline do Ticket -->
-                        <div class="ticket-timeline">
-                            <h4>Histórico de Atendimento</h4>
+                        <!-- Timeline do Ticket (layout estilo Octadesk) -->
+                        <div class="ticket-timeline ticket-history-octa">
+                            <h4>Histórico de atendimento</h4>
                             <div class="timeline-container" id="timeline-${ticket.id}">
                                 ${generateTimelineHTML(ticket)}
                             </div>
                         </div>
 
                         <!-- Área de Resposta -->
-                        <div class="ticket-response">
-                            <div class="response-tabs">
-                                <button class="response-tab active" data-tab="public">Resposta Pública</button>
-                                <button class="response-tab" data-tab="internal">Anotação Interna</button>
-                            </div>
-                            
-                            <div class="response-content">
-                                <div class="response-tab-content active" id="public-${ticket.id}">
-                                    <div class="response-form">
-                                        <textarea class="response-textarea" placeholder="Digite sua resposta..." rows="4"></textarea>
-                                        <div class="response-actions">
-                                            <button type="button" class="btn-secondary" onclick="openAIChatbot()">
-                                                <i class="fas fa-robot"></i> Assistente IA
-                                            </button>
-                                        </div>
+                        <div class="ticket-response octa-comment-panel">
+                            <div class="octa-comment-panel-row">
+                                <div class="octa-panel-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
+                                <div class="octa-panel-box">
+                                    <div class="response-tabs octa-nav-tabs">
+                                        <button type="button" class="response-tab octa-nav-tab octa-tab-public active" data-tab="public"><i class="fas fa-envelope"></i> Resposta pública</button>
+                                        <button type="button" class="response-tab octa-nav-tab octa-tab-internal" data-tab="internal"><i class="fas fa-edit"></i> Anotação interna</button>
                                     </div>
-                                </div>
-                                
-                                <div class="response-tab-content" id="internal-${ticket.id}">
-                                    <div class="response-form internal-form">
-                                        <div class="internal-note-header">
-                                            <i class="fas fa-lock"></i>
-                                            <span>Anotação Interna - Não será enviada ao cliente</span>
+                                    <div class="response-content octa-response-panel-body">
+                                        <div class="response-tab-content active" id="public-${ticket.id}">
+                                            <div class="response-form">
+                                                <textarea class="response-textarea" placeholder="Digite sua resposta ao cliente..." rows="5"></textarea>
+                                                <div class="response-actions">
+                                                    <button type="button" class="btn-secondary" onclick="openAIChatbot()">
+                                                        <i class="fas fa-robot"></i> Assistente IA
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <textarea class="response-textarea internal-textarea" placeholder="Digite uma anotação interna..." rows="4"></textarea>
+                                        <div class="response-tab-content" id="internal-${ticket.id}">
+                                            <div class="response-form internal-form">
+                                                <div class="internal-note-header">
+                                                    <i class="fas fa-lock"></i>
+                                                    <span>Anotação interna — não será enviada ao cliente</span>
+                                                </div>
+                                                <textarea class="response-textarea internal-textarea" placeholder="Digite uma anotação interna..." rows="5"></textarea>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1675,16 +1647,34 @@ function generateTimelineHTML(ticket) {
         author: 'Sistema'
     });
     
-    // Adicionar mensagens públicas
+    // Mensagens (cliente, públicas ou internas no array messages)
     if (ticket.messages && ticket.messages.length > 0) {
         ticket.messages.forEach(msg => {
+            const isInternal = msg.type === 'internal';
+            if (isInternal) {
+                timelineEntries.push({
+                    id: msg.id,
+                    type: 'internal',
+                    text: msg.text,
+                    timestamp: msg.timestamp,
+                    status: msg.status,
+                    author: msg.author || 'Atendente'
+                });
+                return;
+            }
+            const isClient =
+                msg.fromClient === true ||
+                msg.type === 'client' ||
+                msg.sender === 'them';
             timelineEntries.push({
                 id: msg.id,
-                type: 'public',
+                type: isClient ? 'client' : 'public',
                 text: msg.text,
                 timestamp: msg.timestamp,
                 status: msg.status,
-                author: 'Atendente'
+                author: isClient
+                    ? (msg.author || ticket.clientName || ticket.solicitante || 'Cliente')
+                    : (msg.author || 'Atendente')
             });
         });
     }
@@ -1698,7 +1688,7 @@ function generateTimelineHTML(ticket) {
                 text: note.text,
                 timestamp: note.timestamp,
                 status: note.status,
-                author: 'Atendente'
+                author: note.author || 'Atendente'
             });
         });
     }
@@ -1710,36 +1700,96 @@ function generateTimelineHTML(ticket) {
         return '<p class="no-timeline">Nenhum histórico disponível.</p>';
     }
     
-    // Gerar HTML da timeline
-    let timelineHTML = '<div class="timeline">';
+    let timelineHTML = '<div class="octa-timeline">';
     
-    timelineEntries.forEach((entry, index) => {
-        const date = new Date(entry.timestamp);
-        const timeString = date.toLocaleString('pt-BR');
-        const statusName = getStatusName(entry.status);
-        const statusColor = getStatusColor(entry.status);
-        
+    timelineEntries.forEach((entry) => {
+        const timeLine = formatOctaDateTime(entry.timestamp);
+        const authorSafe = escapeHtml(
+            entry.author || (entry.type === 'client' ? 'Cliente' : 'Atendente')
+        );
+        const titleLine = getOctaInteractionTitle(entry);
+        const avatarLetter = getOctaAvatarLetter(entry.author);
+        const side = getOctaSide(entry);
+        let headerClass = 'octa-header-blue';
+        let thumbClass = 'octa-thumb-blue';
+        let thumbIcon = 'fa-envelope';
+        if (entry.type === 'creation') {
+            headerClass = 'octa-header-slate';
+            thumbClass = 'octa-thumb-slate';
+            thumbIcon = 'fa-ticket-alt';
+        } else if (entry.type === 'internal') {
+            headerClass = 'octa-header-amber';
+            thumbClass = 'octa-thumb-amber';
+            thumbIcon = 'fa-edit';
+        } else if (entry.type === 'client') {
+            headerClass = 'octa-header-client';
+            thumbClass = 'octa-thumb-client';
+            thumbIcon = 'fa-user';
+        }
+
+        const cardHtml = `
+                        <article class="octa-comment-card box-bordered-octa">
+                            <div class="octa-card-head-row">
+                                <span class="octa-thumb ${thumbClass}" aria-hidden="true"><i class="fas ${thumbIcon}"></i></span>
+                                <header class="octa-comment-header ${headerClass}">
+                                    <span class="octa-comment-title">${titleLine}</span>
+                                </header>
+                            </div>
+                            <div class="octa-comment-text">${escapeHtml(entry.text).replace(/\n/g, '<br>')}</div>
+                        </article>`;
+
+        const avatarBlock = `<div class="octa-avatar" title="${authorSafe}">${escapeHtml(avatarLetter)}</div>`;
+        const stackBlock = `<div class="octa-interaction-stack">${cardHtml}</div>`;
+
+        let rowHtml;
+        if (side === 'ours') {
+            rowHtml = `<div class="octa-interaction-row">${stackBlock}${avatarBlock}</div>`;
+        } else {
+            rowHtml = `<div class="octa-interaction-row">${avatarBlock}${stackBlock}</div>`;
+        }
+
         timelineHTML += `
-            <div class="timeline-item ${entry.type}" data-entry-id="${entry.id}">
-                <div class="timeline-marker">
-                    <div class="timeline-dot" style="background-color: ${statusColor}"></div>
-                    ${index < timelineEntries.length - 1 ? '<div class="timeline-line"></div>' : ''}
-                </div>
-                <div class="timeline-content">
-                    <div class="timeline-header">
-                        <span class="timeline-type">${getTypeLabel(entry.type)}</span>
-                        <span class="timeline-status" style="color: ${statusColor}">${statusName}</span>
-                        <span class="timeline-time">${timeString}</span>
-                    </div>
-                    <div class="timeline-text">${escapeHtml(entry.text).replace(/\n/g, '<br>')}</div>
-                    <div class="timeline-author">por ${entry.author}</div>
-                </div>
+            <div class="octa-interaction timeline-item octa-side-${side} ${entry.type}" data-entry-id="${entry.id}">
+                <time class="octa-time" datetime="${escapeHtml(String(entry.timestamp))}">${timeLine}</time>
+                ${rowHtml}
             </div>
         `;
     });
     
     timelineHTML += '</div>';
     return timelineHTML;
+}
+
+function formatOctaDateTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function getOctaAvatarLetter(author) {
+    if (!author || !String(author).trim()) return '?';
+    return String(author).trim().charAt(0).toUpperCase();
+}
+
+function getOctaInteractionTitle(entry) {
+    const safe = escapeHtml(entry.author || 'Atendente');
+    if (entry.type === 'creation') {
+        return 'Sistema | Abertura do ticket';
+    }
+    if (entry.type === 'internal') {
+        return `${safe} (Agente) | Anotação interna`;
+    }
+    if (entry.type === 'client') {
+        return `${safe} | Mensagem`;
+    }
+    return `${safe} (Agente) | Mensagem`;
+}
+
+function getOctaSide(entry) {
+    if (entry.type === 'creation') return 'system';
+    if (entry.type === 'client') return 'client';
+    return 'ours';
 }
 
 // Função para obter nome do status
@@ -2007,29 +2057,10 @@ function saveTicket() {
         isNewTicket: true
     };
     
-    // Coletar dados do formulário personalizado se existir
     if (tempTicket.formId) {
         const formFieldsContainer = document.getElementById('dynamicFormFields');
         if (formFieldsContainer) {
-            const formFields = formFieldsContainer.querySelectorAll('.ticket-form-field');
-            formFields.forEach(field => {
-                const fieldId = field.getAttribute('data-field-id');
-                const fieldType = field.querySelector('input, select, textarea')?.type || 
-                                 field.querySelector('select') ? 'select' : 'text';
-                
-                let value = '';
-                if (fieldType === 'checkbox') {
-                    value = field.querySelector('input[type="checkbox"]')?.checked || false;
-                } else if (fieldType === 'select') {
-                    value = field.querySelector('select')?.value || '';
-                } else {
-                    value = field.querySelector('input, textarea')?.value || '';
-                }
-                
-                if (value !== '') {
-                    tempTicket.formData[fieldId] = value;
-                }
-            });
+            mergeTicketFormDataFromContainer(formFieldsContainer, tempTicket);
         }
     }
     
@@ -2091,29 +2122,10 @@ function saveNewTicket(ticketId) {
         formData: {}
     };
     
-    // Coletar dados do formulário personalizado se aplicado
     if (newTicket.formId) {
         const formFieldsContainer = document.getElementById('ticketFormFields');
         if (formFieldsContainer) {
-            const formFields = formFieldsContainer.querySelectorAll('.ticket-form-field');
-            formFields.forEach(field => {
-                const fieldId = field.getAttribute('data-field-id');
-                const fieldType = field.querySelector('input, select, textarea')?.type || 
-                                 field.querySelector('select') ? 'select' : 'text';
-                
-                let value = '';
-                if (fieldType === 'checkbox') {
-                    value = field.querySelector('input[type="checkbox"]')?.checked || false;
-                } else if (fieldType === 'select') {
-                    value = field.querySelector('select')?.value || '';
-                } else {
-                    value = field.querySelector('input, textarea')?.value || '';
-                }
-                
-                if (value !== '') {
-                    newTicket.formData[fieldId] = value;
-                }
-            });
+            mergeTicketFormDataFromContainer(formFieldsContainer, newTicket);
         }
     }
     
@@ -2252,31 +2264,10 @@ function changeTicketStatus(ticketId, newStatus) {
         internalNote = internalTextarea.value.trim();
     }
     
-    // Coletar dados dos formulários personalizados
-    const formFieldsContainer = document.getElementById('ticketFormFields');
-    if (formFieldsContainer && foundTicket.formId) {
-        const formFields = formFieldsContainer.querySelectorAll('.ticket-form-field');
-        formFields.forEach(field => {
-            const fieldId = field.getAttribute('data-field-id');
-            const fieldType = field.querySelector('input, select, textarea')?.type || 
-                             field.querySelector('select') ? 'select' : 'text';
-            
-            let value = '';
-            if (fieldType === 'checkbox') {
-                value = field.querySelector('input[type="checkbox"]')?.checked || false;
-            } else if (fieldType === 'select') {
-                value = field.querySelector('select')?.value || '';
-            } else {
-                value = field.querySelector('input, textarea')?.value || '';
-            }
-            
-            if (value !== '') {
-                if (!foundTicket.formData) {
-                    foundTicket.formData = {};
-                }
-                foundTicket.formData[fieldId] = value;
-            }
-        });
+    // Coletar dados dos formulários personalizados (inclui tabulação / árvore completa)
+    const formFieldsContainerModal = document.getElementById('ticketFormFields');
+    if (formFieldsContainerModal && foundTicket.formId) {
+        mergeTicketFormDataFromContainer(formFieldsContainerModal, foundTicket);
     }
     
     // Coletar dados do cliente
@@ -2307,6 +2298,7 @@ function changeTicketStatus(ticketId, newStatus) {
             id: Date.now(),
             text: responseText,
             type: 'response',
+            sender: 'me',
             timestamp: new Date().toISOString(),
             status: newStatus
         });
@@ -2631,7 +2623,7 @@ function updateTicketFormData(fieldId, value) {
         console.log(`🔍 Verificando caixa: ${box.name} (${box.tickets ? box.tickets.length : 0} tickets)`);
         
         if (box.tickets) {
-            const ticket = box.tickets.find(t => t.id === ticketId);
+            const ticket = box.tickets.find(t => Number(t.id) === Number(ticketId));
             if (ticket) {
                 console.log('✅ Ticket encontrado:', ticket.title);
                 console.log('📋 Formulário do ticket:', ticket.formId);
@@ -2678,7 +2670,7 @@ function updateTicketFormData(fieldId, value) {
     
     for (const box of savedData) {
         if (box.tickets) {
-            savedTicket = box.tickets.find(t => t.id === ticketId);
+            savedTicket = box.tickets.find(t => Number(t.id) === Number(ticketId));
             if (savedTicket) break;
         }
     }
@@ -2697,17 +2689,117 @@ function updateTicketFormDataCheckbox(fieldId, checked) {
     updateTicketFormData(fieldId, checked ? 'sim' : 'não');
 }
 
-// Função para obter ID do ticket atual
+// Função para obter ID do ticket atual (modal ou aba de ticket aberta)
 function getCurrentTicketId() {
     const modal = document.getElementById('ticketModal');
-    if (!modal) return null;
-    
-    const titleElement = modal.querySelector('h3');
-    if (titleElement) {
-        const match = titleElement.textContent.match(/#(\d+)/);
-        return match ? parseInt(match[1]) : null;
+    if (modal) {
+        const modalStyle = window.getComputedStyle(modal);
+        if (modalStyle.display !== 'none' && modalStyle.visibility !== 'hidden') {
+            const titleElement = modal.querySelector('h3');
+            if (titleElement) {
+                const match = titleElement.textContent.match(/#(\d+)/);
+                if (match) return parseInt(match[1], 10);
+            }
+        }
     }
+
+    const activeTabContent = document.querySelector('.ticket-tabs-content .ticket-tab-content.active');
+    if (activeTabContent && activeTabContent.id) {
+        const m = activeTabContent.id.match(/^tab-ticket-(\d+)$/);
+        if (m) return parseInt(m[1], 10);
+    }
+
+    const activeTabItem = document.querySelector('.ticket-tab-item.active[data-tab^="ticket-"]');
+    if (activeTabItem) {
+        const tab = activeTabItem.getAttribute('data-tab');
+        const m2 = tab && tab.match(/^ticket-(\d+)$/);
+        if (m2) return parseInt(m2[1], 10);
+    }
+
     return null;
+}
+
+/** Campo de tabulação: label "Tabulação" ou primeiro campo em árvore */
+function getTabulacaoFieldForTicket(ticket) {
+    if (!ticket || !ticket.formId) return null;
+    const forms = JSON.parse(localStorage.getItem('forms') || '[]');
+    const form = forms.find(f => f.id == ticket.formId);
+    if (!form || !form.fields) return null;
+    const byLabel = form.fields.find(f => f.label && /tabula/i.test(f.label));
+    if (byLabel) return byLabel;
+    return form.fields.find(f => ['tree-sequential', 'tree', 'tree-select'].includes(f.type)) || null;
+}
+
+function getTabulacaoMetaHtml(ticket) {
+    const field = getTabulacaoFieldForTicket(ticket);
+    if (!field) return '';
+    const label = field.label || 'Tabulação';
+    const key = field.id;
+    const raw =
+        ticket.formData && ticket.formData[key] != null && String(ticket.formData[key]).trim() !== ''
+            ? String(ticket.formData[key])
+            : '';
+    const valHtml = raw ? escapeHtml(raw) : '<span class="meta-empty">—</span>';
+    return `
+                            <div class="meta-item meta-item-tabulation">
+                                <span class="meta-label">${escapeHtml(label)}:</span>
+                                <span class="meta-value meta-value-tabulation">${valHtml}</span>
+                            </div>`;
+}
+
+/** Lê valor completo de um .ticket-form-field (inclui árvore / tabulação em cascata) */
+function getTicketFormFieldValue(fieldEl) {
+    const treeSeq = fieldEl.querySelector('.tree-sequential-container[data-field-id]');
+    if (treeSeq) {
+        const path = [];
+        treeSeq.querySelectorAll('.tree-sequential-select').forEach(s => {
+            if (s.value) path.push(s.value);
+        });
+        const fullPath = path.join(' > ');
+        return { value: fullPath, isEmpty: !fullPath };
+    }
+    if (fieldEl.querySelector('.tree-field-container')) {
+        const selects = fieldEl.querySelectorAll('.tree-level-select');
+        if (selects.length) {
+            const path = [];
+            selects.forEach(s => {
+                if (s.value) path.push(s.value);
+            });
+            const fullPath = path.join(' > ');
+            return { value: fullPath, isEmpty: !fullPath };
+        }
+    }
+    const checkbox = fieldEl.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+        return { value: checkbox.checked ? 'sim' : 'não', isEmpty: false };
+    }
+    const radioChecked = fieldEl.querySelector('input[type="radio"]:checked');
+    if (radioChecked) {
+        return { value: radioChecked.value || '', isEmpty: !radioChecked.value };
+    }
+    const select = fieldEl.querySelector('select');
+    if (select) {
+        return { value: select.value || '', isEmpty: !select.value };
+    }
+    const input = fieldEl.querySelector('input:not([type="radio"]):not([type="checkbox"]), textarea');
+    if (input) {
+        return { value: input.value || '', isEmpty: !input.value };
+    }
+    return { value: '', isEmpty: true };
+}
+
+function mergeTicketFormDataFromContainer(formFieldsContainer, ticket) {
+    if (!formFieldsContainer || !ticket.formId) return;
+    if (!ticket.formData) ticket.formData = {};
+    const formFields = formFieldsContainer.querySelectorAll('.ticket-form-field');
+    formFields.forEach(fieldEl => {
+        const fieldId = fieldEl.getAttribute('data-field-id');
+        if (!fieldId) return;
+        const { value, isEmpty } = getTicketFormFieldValue(fieldEl);
+        if (!isEmpty && value !== '') {
+            ticket.formData[fieldId] = value;
+        }
+    });
 }
 
 // Função para configurar eventos dos campos do formulário
@@ -2716,65 +2808,79 @@ function setupFormFieldEvents(ticketId) {
     console.log('Ticket ID:', ticketId);
     
     // Aguardar um pouco para garantir que o DOM foi renderizado
-    setTimeout(() => {
-        const formFieldsContainer = document.getElementById('ticketFormFields');
-        if (!formFieldsContainer) {
-            console.log('❌ Container não encontrado após timeout');
-            return;
+    // Tentar encontrar o container com diferentes IDs possíveis
+    let formFieldsContainer = null;
+    let attempts = 0;
+    const maxAttempts = 10; // 10 tentativas = 1 segundo
+    
+    const checkContainer = () => {
+        attempts++;
+        
+        // Tentar diferentes IDs possíveis
+        formFieldsContainer = document.getElementById('ticketFormFields') || 
+                            document.getElementById(`ticketFormFields-${ticketId}`) ||
+                            document.getElementById(`ticketFormFields-${ticketId.toString()}`);
+        
+        if (formFieldsContainer) {
+            console.log('✅ Container encontrado após', attempts * 100, 'ms');
+            
+            // Configurar eventos para campos de árvore
+            const treeFields = formFieldsContainer.querySelectorAll('.tree-selection-container');
+            console.log('Campos de árvore encontrados:', treeFields.length);
+            treeFields.forEach(container => {
+                setupCascadeTreeEvents(container, ticketId);
+            });
+            
+            // Configurar eventos para todos os inputs
+            const allInputs = formFieldsContainer.querySelectorAll('input, select, textarea');
+            console.log('Total de inputs encontrados:', allInputs.length);
+            
+            allInputs.forEach((input, index) => {
+                const fieldContainer = input.closest('.ticket-form-field');
+                if (!fieldContainer) return;
+                
+                const fieldId = fieldContainer.getAttribute('data-field-id');
+                if (!fieldId) return;
+                
+                // Remover listeners anteriores para evitar duplicação
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+                
+                // Configurar eventos baseado no tipo de campo
+                if (newInput.type === 'checkbox') {
+                    newInput.addEventListener('change', (e) => {
+                        updateTicketFormDataCheckbox(fieldId, e.target.checked);
+                    });
+                } else if (newInput.tagName === 'SELECT') {
+                    newInput.addEventListener('change', (e) => {
+                        updateTicketFormData(fieldId, e.target.value);
+                    });
+                } else {
+                    newInput.addEventListener('input', (e) => {
+                        updateTicketFormData(fieldId, e.target.value);
+                    });
+                }
+            });
+            
+            return true;
         }
         
-        console.log('✅ Container encontrado após timeout');
+        if (attempts < maxAttempts) {
+            setTimeout(checkContainer, 100);
+        } else {
+            console.log('❌ Container não encontrado após', maxAttempts * 100, 'ms');
+            console.log('Tentando IDs:', [
+                'ticketFormFields',
+                `ticketFormFields-${ticketId}`,
+                `ticketFormFields-${ticketId.toString()}`
+            ]);
+        }
         
-        // Configurar eventos para campos de árvore
-        const treeFields = document.querySelectorAll('.tree-selection-container');
-        console.log('Campos de árvore encontrados:', treeFields.length);
-        treeFields.forEach(container => {
-            setupCascadeTreeEvents(container, ticketId);
-        });
-        
-        // Configurar eventos para todos os inputs
-        const allInputs = formFieldsContainer.querySelectorAll('input, select, textarea');
-        console.log('Total de inputs encontrados:', allInputs.length);
-        
-        allInputs.forEach((input, index) => {
-            const fieldContainer = input.closest('.ticket-form-field');
-            if (!fieldContainer) return;
-            
-            const fieldId = fieldContainer.getAttribute('data-field-id');
-            if (!fieldId) return;
-            
-            console.log(`Configurando evento ${index + 1}: ${fieldId}`);
-            
-            // Remover eventos anteriores
-            input.removeEventListener('input', handleFieldChange);
-            input.removeEventListener('change', handleFieldChange);
-            
-            // Adicionar novo evento
-            if (input.type === 'checkbox') {
-                input.addEventListener('change', function() {
-                    console.log(`Checkbox ${fieldId} alterado:`, this.checked);
-                    updateTicketFormDataCheckbox(fieldId, this.checked);
-                });
-            } else if (input.type === 'radio') {
-                input.addEventListener('change', function() {
-                    console.log(`Radio ${fieldId} alterado:`, this.value);
-                    updateTicketFormData(fieldId, this.value);
-                });
-            } else if (input.tagName === 'SELECT') {
-                input.addEventListener('change', function() {
-                    console.log(`Select ${fieldId} alterado:`, this.value);
-                    updateTicketFormData(fieldId, this.value);
-                });
-            } else {
-                input.addEventListener('input', function() {
-                    console.log(`Input ${fieldId} alterado:`, this.value);
-                    updateTicketFormData(fieldId, this.value);
-                });
-            }
-        });
-        
-        console.log('=== EVENTOS CONFIGURADOS ===');
-    }, 100);
+        return false;
+    };
+    
+    // Iniciar verificação
+    setTimeout(checkContainer, 100);
 }
 
 // Função genérica para lidar com mudanças nos campos
@@ -3215,7 +3321,7 @@ function testTreeReconstruction() {
         
         if (savedValue) {
             console.log('🔍 Testando busca do caminho...');
-            const path = findPathToValue(field.config.treeStructure, savedValue);
+            const path = findPathFromStoredTreeValue(field.config.treeStructure, savedValue);
             console.log('Caminho encontrado:', path);
             
             if (path.length > 0) {
@@ -3340,12 +3446,10 @@ function updateTreeFieldAsSelects(fieldId, savedValue) {
         return;
     }
     
-    // Encontrar o caminho até o valor
-    const path = findPathToValue(targetField.config.treeStructure, savedValue);
+    const path = findPathFromStoredTreeValue(targetField.config.treeStructure, savedValue);
     console.log('Caminho encontrado:', path);
     
     if (path.length > 0) {
-        // Renderizar o caminho completo como selects
         renderTreePathAsSelects(fieldId, path);
     }
     
@@ -3459,6 +3563,70 @@ function updateTreeFieldDisplay(fieldId, savedValue) {
     console.log('=== CAMPO DE ÁRVORE ATUALIZADO ===');
 }
 
+/** Segmentos de um valor salvo em árvore (ex.: "A > B > C") */
+function parseTreePathSegments(storedValue) {
+    if (storedValue == null || storedValue === '') return [];
+    return String(storedValue)
+        .split(/\s*>\s*/)
+        .map(s => s.trim())
+        .filter(Boolean);
+}
+
+/** Resolve sequência de labels na estrutura da árvore (caminho completo) */
+function resolveNodesByPathLabels(treeStructure, labels) {
+    const nodes = [];
+    let children = treeStructure;
+    for (const label of labels) {
+        const node = Array.isArray(children) ? children.find(c => c.label === label) : null;
+        if (!node) return [];
+        nodes.push(node);
+        children = node.children || [];
+    }
+    return nodes;
+}
+
+/**
+ * Caminho de nós a partir do valor salvo: aceita "A > B > C" ou apenas folha (legado).
+ */
+function findPathFromStoredTreeValue(treeStructure, storedValue) {
+    if (storedValue == null || String(storedValue).trim() === '') return [];
+    const labels = parseTreePathSegments(String(storedValue));
+    if (labels.length === 0) return [];
+    if (labels.length > 1) {
+        const nodes = resolveNodesByPathLabels(treeStructure, labels);
+        return nodes.length === labels.length ? nodes : [];
+    }
+    return findPathToValue(treeStructure, labels[0]);
+}
+
+/** Labels do caminho da raiz até o nó com id (para salvar tabulação completa em árvore por clique) */
+function findPathLabelsToNodeId(treeStructure, nodeId) {
+    function walk(nodes, acc) {
+        if (!Array.isArray(nodes)) return null;
+        for (const node of nodes) {
+            const next = [...acc, node.label];
+            if (String(node.id) === String(nodeId)) return next;
+            if (node.children && node.children.length) {
+                const found = walk(node.children, next);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+    return walk(treeStructure, []) || [];
+}
+
+/** Caminho completo nos selects em cascata (.tree-level-select) */
+function getTreeCascadePathFromSelect(selectElement) {
+    const container = selectElement && selectElement.closest('.tree-field-container');
+    if (!container) return [];
+    const path = [];
+    container.querySelectorAll('.tree-level-select').forEach(s => {
+        if (s.value) path.push(s.value);
+    });
+    return path;
+}
+
 // Função para expandir árvore até o valor selecionado
 function expandTreeToValue(fieldId, targetValue) {
     console.log(`=== EXPANDINDO ÁRVORE ATÉ VALOR ===`);
@@ -3479,8 +3647,7 @@ function expandTreeToValue(fieldId, targetValue) {
         return;
     }
     
-    // Encontrar o caminho até o valor
-    const path = findPathToValue(targetField.config.treeStructure, targetValue);
+    const path = findPathFromStoredTreeValue(targetField.config.treeStructure, targetValue);
     console.log('Caminho encontrado:', path);
     
     if (path.length > 0) {
@@ -3571,7 +3738,7 @@ function renderTreeSelection(field, currentValue) {
     // Renderizar cascata completa se há valor salvo
     if (currentValue) {
         console.log('Valor salvo encontrado, reconstruindo cascata completa...');
-        const path = findPathToValue(treeStructure, currentValue);
+        const path = findPathFromStoredTreeValue(treeStructure, currentValue);
         console.log('Caminho encontrado:', path);
         
         if (path.length > 0) {
@@ -3607,12 +3774,13 @@ function renderTreeSelection(field, currentValue) {
             }
         } else {
             console.log('Caminho não encontrado, renderizando primeiro nível...');
-            // Fallback para primeiro nível
+            const segments = parseTreePathSegments(currentValue);
+            const firstLabel = segments[0] || String(currentValue).trim();
             html += `<select class="tree-level-select" data-level="0" data-field-id="${field.id}" onchange="handleTreeLevelChange(this)">`;
             html += '<option value="">Selecione uma opção</option>';
             
             treeStructure.forEach(node => {
-                const selected = currentValue === node.label ? 'selected' : '';
+                const selected = firstLabel === node.label ? 'selected' : '';
                 html += `<option value="${node.label}" data-node-id="${node.id}" data-has-children="${node.children && node.children.length > 0}" ${selected}>${node.label}</option>`;
             });
             
@@ -3655,10 +3823,10 @@ function renderTreeSequential(field, currentValue) {
     // Renderizar como selects sequenciais (estilo Zendesk)
     let html = `<div class="tree-sequential-container" data-field-id="${field.id}">`;
     
-    // Se há valor salvo, reconstruir o caminho completo
+    // Se há valor salvo, reconstruir o caminho completo (valor no formato "N1 > N2 > ...")
     if (currentValue) {
         console.log('Valor salvo encontrado, reconstruindo caminho sequencial...');
-        const path = findPathToValue(treeStructure, currentValue);
+        const path = findPathFromStoredTreeValue(treeStructure, currentValue);
         console.log('Caminho encontrado:', path);
         
         if (path.length > 0) {
@@ -3694,14 +3862,15 @@ function renderTreeSequential(field, currentValue) {
                 }
             }
         } else {
-            // Fallback para primeiro nível
+            const segments = parseTreePathSegments(currentValue);
+            const firstLabel = segments[0] || String(currentValue).trim();
             html += `<div class="tree-sequential-level" data-level="0">`;
             html += `<label class="tree-sequential-label">${field.label}</label>`;
             html += `<select class="tree-sequential-select" data-level="0" data-field-id="${field.id}" onchange="handleTreeSequentialChange(this)">`;
             html += '<option value="">Selecione uma opção</option>';
             
             treeStructure.forEach(node => {
-                const selected = currentValue === node.label ? 'selected' : '';
+                const selected = firstLabel === node.label ? 'selected' : '';
                 html += `<option value="${node.label}" data-node-id="${node.id}" data-has-children="${node.children && node.children.length > 0}" ${selected}>${node.label}</option>`;
             });
             
@@ -3744,8 +3913,7 @@ function handleTreeSequentialChange(selectElement) {
     console.log('Level:', level);
     console.log('Selected Value:', selectedValue);
     
-    // Remover todos os níveis seguintes
-    const container = document.querySelector(`.tree-sequential-container[data-field-id="${fieldId}"]`);
+    const container = selectElement.closest('.tree-sequential-container');
     if (container) {
         const allLevels = container.querySelectorAll('.tree-sequential-level');
         allLevels.forEach((levelDiv, index) => {
@@ -3755,20 +3923,16 @@ function handleTreeSequentialChange(selectElement) {
         });
     }
     
-    // Se não selecionou nada, apenas limpar
     if (!selectedValue) {
-        // Salvar valor vazio
         updateTicketFormData(fieldId, '');
         return;
     }
     
-    // Salvar o valor atual (caminho completo até aqui)
-    const path = getTreeSequentialPath(fieldId);
+    const path = getTreeSequentialPathFromSelect(selectElement);
     const fullPath = path.join(' > ');
     console.log('Salvando caminho completo:', fullPath);
     updateTicketFormData(fieldId, fullPath);
     
-    // Buscar o nó selecionado
     const forms = JSON.parse(localStorage.getItem('forms') || '[]');
     let targetField = null;
     
@@ -3782,21 +3946,29 @@ function handleTreeSequentialChange(selectElement) {
         return;
     }
     
-    // Encontrar o nó selecionado no caminho atual
-    const pathNodes = getTreeSequentialPathNodes(fieldId, targetField.config.treeStructure);
+    const pathNodes = getTreeSequentialPathNodes(fieldId, targetField.config.treeStructure, path);
     const selectedNode = pathNodes[level];
     
     console.log('Nó selecionado:', selectedNode);
     
-    // Se o nó tem filhos, mostrar próximo nível
     if (selectedNode && selectedNode.children && selectedNode.children.length > 0) {
         console.log('Nó tem filhos, criando próximo nível sequencial...');
-        createNextSequentialLevel(fieldId, selectedNode.children, level + 1);
+        createNextSequentialLevel(fieldId, selectedNode.children, level + 1, container);
     } else {
         console.log('Nó não tem filhos, seleção completa.');
     }
     
     console.log('=== MUDANÇA EM ÁRVORE SEQUENCIAL PROCESSADA ===');
+}
+
+function getTreeSequentialPathFromSelect(selectElement) {
+    const container = selectElement && selectElement.closest && selectElement.closest('.tree-sequential-container');
+    if (!container) return [];
+    const path = [];
+    container.querySelectorAll('.tree-sequential-select').forEach(select => {
+        if (select.value) path.push(select.value);
+    });
+    return path;
 }
 
 // Função para obter caminho atual da árvore sequencial
@@ -3817,8 +3989,8 @@ function getTreeSequentialPath(fieldId) {
 }
 
 // Função para obter nós do caminho atual
-function getTreeSequentialPathNodes(fieldId, treeStructure) {
-    const path = getTreeSequentialPath(fieldId);
+function getTreeSequentialPathNodes(fieldId, treeStructure, pathOverride) {
+    const path = pathOverride || getTreeSequentialPath(fieldId);
     const nodes = [];
     let currentChildren = treeStructure;
     
@@ -3840,12 +4012,14 @@ function getTreeSequentialPathNodes(fieldId, treeStructure) {
 }
 
 // Função para criar próximo nível sequencial
-function createNextSequentialLevel(fieldId, children, level) {
+function createNextSequentialLevel(fieldId, children, level, containerEl) {
     console.log(`=== CRIANDO PRÓXIMO NÍVEL SEQUENCIAL ${level} ===`);
     console.log('Field ID:', fieldId);
     console.log('Children:', children);
     
-    const container = document.querySelector(`.tree-sequential-container[data-field-id="${fieldId}"]`);
+    const container =
+        containerEl ||
+        document.querySelector(`.tree-sequential-container[data-field-id="${fieldId}"]`);
     if (!container) {
         console.log('❌ Container não encontrado');
         return;
@@ -3880,9 +4054,10 @@ function handleTreeLevelChange(selectElement) {
     console.log('Level:', level);
     console.log('Selected Value:', selectedValue);
     
-    // Salvar o valor atual
-    console.log('Salvando valor:', selectedValue, 'para field:', fieldId);
-    updateTicketFormData(fieldId, selectedValue);
+    const pathLabels = getTreeCascadePathFromSelect(selectElement);
+    const fullPath = pathLabels.join(' > ');
+    console.log('Salvando tabulação completa:', fullPath, 'para field:', fieldId);
+    updateTicketFormData(fieldId, fullPath);
     
     // Verificar se foi salvo
     setTimeout(() => {
@@ -4087,8 +4262,9 @@ function selectTreeNode(fieldId, nodeLabel, nodeId, level, ticketId) {
     
     console.log('Nó selecionado encontrado:', nodeLabel);
     
-    // Atualizar dados do formulário
-    updateTicketFormData(fieldId, nodeLabel);
+    const pathLabels = findPathLabelsToNodeId(treeStructure, nodeId);
+    const fullPath = pathLabels.length ? pathLabels.join(' > ') : nodeLabel;
+    updateTicketFormData(fieldId, fullPath);
     
     // Se o nó tem filhos, renderizar próximo nível
     if (selectedNode.children && selectedNode.children.length > 0) {
@@ -4830,28 +5006,36 @@ function updateDashboardCharts(stats) {
     }
 }
 
+// IDs dos painéis da página Configurações (evita colisão com modal WhatsApp, ex.: automationTab)
+const CONFIG_TAB_PANEL_IDS = {
+    forms: 'formsTab',
+    workflows: 'workflowsTab',
+    backup: 'backupTab',
+    api: 'apiTab',
+    automation: 'configAutomationTab'
+};
+
+function showConfigPlaceholder() {
+    document.querySelectorAll('.config-menu-item').forEach(item => item.classList.remove('active'));
+    document.querySelectorAll('#config .config-content > .config-tab-content').forEach(content => {
+        content.classList.remove('active');
+        content.setAttribute('aria-hidden', 'true');
+    });
+    const ph = document.getElementById('configTabPlaceholder');
+    if (ph) {
+        ph.classList.add('active');
+        ph.setAttribute('aria-hidden', 'false');
+    }
+}
+
 // Função para carregar configurações
 function loadConfig() {
     console.log('Carregando configurações...');
     
-    // Configurar event listeners para as abas de configuração
     setupConfigTabListeners();
-    
-    // Configurar event listeners para os botões
     setupConfigButtons();
-    
-    // Criar formulário de teste se não existir
     createTestFormIfNeeded();
-    
-    // Carregar dados das abas
-    loadUsersTab();
-    loadFormsTab();
-    loadWorkflowsTab();
-    loadBackupTab();
-    loadAuditTab();
-    loadApiTab();
-    loadAutomationTab();
-    loadFieldsTab();
+    showConfigPlaceholder();
 }
 
 // Função para criar formulário de teste
@@ -4997,22 +5181,10 @@ function createTestFormIfNeeded() {
 
 // Função para configurar event listeners dos botões de configuração
 function setupConfigButtons() {
-    // Botão Adicionar Usuário
-    const addUserBtn = document.getElementById('addUser');
-    if (addUserBtn) {
-        addUserBtn.onclick = addUser;
-    }
-    
     // Botão Adicionar Formulário
     const addFormBtn = document.getElementById('addForm');
     if (addFormBtn) {
         addFormBtn.onclick = openFormModal;
-    }
-    
-    // Botão Adicionar Campo
-    const addFieldBtn = document.getElementById('addField');
-    if (addFieldBtn) {
-        addFieldBtn.onclick = addField;
     }
     
     // Botão Adicionar Automação
@@ -5024,49 +5196,48 @@ function setupConfigButtons() {
 
 // Função para configurar listeners das abas de configuração
 function setupConfigTabListeners() {
-    const configMenuItems = document.querySelectorAll('.config-menu-item');
-    configMenuItems.forEach(item => {
-        item.addEventListener('click', function() {
-            const tabName = this.getAttribute('data-config-tab');
-            switchConfigTab(tabName);
-        });
+    if (window.__velodeskConfigMenuBound) return;
+    window.__velodeskConfigMenuBound = true;
+    const menu = document.querySelector('#config .config-menu');
+    if (!menu) return;
+    menu.addEventListener('click', function(e) {
+        const item = e.target.closest('.config-menu-item');
+        if (!item) return;
+        e.preventDefault();
+        const tabName = item.getAttribute('data-config-tab');
+        if (tabName) switchConfigTab(tabName);
     });
 }
 
 // Função para alternar abas de configuração
 function switchConfigTab(tabName) {
-    // Remover classe active de todos os itens do menu
-    document.querySelectorAll('.config-menu-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    // Adicionar classe active ao item clicado
-    const activeItem = document.querySelector(`[data-config-tab="${tabName}"]`);
-    if (activeItem) {
-        activeItem.classList.add('active');
-    }
-    
-    // Ocultar todas as abas de conteúdo
-    document.querySelectorAll('.config-tab-content').forEach(content => {
+    const panelId = CONFIG_TAB_PANEL_IDS[tabName];
+    if (!panelId) return;
+
+    document.querySelectorAll('.config-menu-item').forEach(item => item.classList.remove('active'));
+    const activeItem = document.querySelector(`#config .config-menu [data-config-tab="${tabName}"]`);
+    if (activeItem) activeItem.classList.add('active');
+
+    document.querySelectorAll('#config .config-content > .config-tab-content').forEach(content => {
         content.classList.remove('active');
+        content.setAttribute('aria-hidden', 'true');
     });
-    
-    // Mostrar aba selecionada
-    const activeTab = document.getElementById(`${tabName}Tab`);
+
+    const activeTab = document.getElementById(panelId);
     if (activeTab) {
         activeTab.classList.add('active');
+        activeTab.setAttribute('aria-hidden', 'false');
     }
-    
-    // Carregar conteúdo específico da aba
-    if (tabName === 'users') {
-        loadUsersTab();
-    } else if (tabName === 'forms') {
-        loadFormsTab();
-    } else if (tabName === 'fields') {
-        loadFieldsTab();
-    } else if (tabName === 'email') {
-        loadEmailTab();
-    }
+
+    const tabLoaders = {
+        forms: loadFormsTab,
+        workflows: loadWorkflowsTab,
+        backup: loadBackupTab,
+        api: loadApiTab,
+        automation: loadAutomationTab
+    };
+    const loader = tabLoaders[tabName];
+    if (typeof loader === 'function') loader();
 }
 
 // Função para carregar aba de usuários
@@ -5167,29 +5338,37 @@ function loadFormsTab() {
     
     if (forms.length === 0) {
         formsList.innerHTML = `
-            <div class="no-data">
-                <i class="fas fa-file-alt"></i>
-                <p>Nenhum formulário criado ainda.</p>
-                <p>Clique em "Novo Formulário" para criar o primeiro.</p>
+            <div class="forms-empty-state">
+                <div class="forms-empty-icon"><i class="fas fa-wpforms"></i></div>
+                <h5 class="forms-empty-title">Nenhum formulário ainda</h5>
+                <p class="forms-empty-text">Use <strong>Criar formulário</strong> para definir um nome. Depois, em <strong>Editar</strong>, adicione os campos que os agentes vão preencher.</p>
+                <button type="button" class="btn-primary" onclick="openFormModal()"><i class="fas fa-plus"></i> Criar o primeiro formulário</button>
             </div>
         `;
         return;
     }
     
     forms.forEach(form => {
+        const nFields = form.fields ? form.fields.length : 0;
         const formItem = document.createElement('div');
-        formItem.className = 'form-item';
+        formItem.className = 'form-item form-item-card';
+        formItem.setAttribute('role', 'listitem');
         formItem.innerHTML = `
-            <div class="form-info">
-                <h4>${escapeHtml(form.name)}</h4>
-                <p>${escapeHtml(form.description || 'Sem descrição')}</p>
-                <span class="form-fields-count">${form.fields ? form.fields.length : 0} campos</span>
+            <div class="form-item-card-main">
+                <span class="form-item-icon" aria-hidden="true"><i class="fas fa-file-alt"></i></span>
+                <div class="form-info">
+                    <h4 class="form-item-title">${escapeHtml(form.name)}</h4>
+                    <p class="form-item-desc">${escapeHtml(form.description || 'Sem descrição — clique em Editar para adicionar.')}</p>
+                    <div class="form-item-meta">
+                        <span class="form-item-badge"><i class="fas fa-th-list"></i> ${nFields} ${nFields === 1 ? 'campo' : 'campos'}</span>
+                    </div>
+                </div>
             </div>
-            <div class="form-actions">
-                <button class="btn-secondary" onclick="editForm(${form.id})" title="Editar Formulário">
-                    <i class="fas fa-edit"></i>
+            <div class="form-actions form-item-card-actions">
+                <button type="button" class="btn-primary btn-form-edit" onclick="editForm(${form.id})" title="Editar nome, descrição e campos">
+                    <i class="fas fa-edit"></i> Editar
                 </button>
-                <button class="btn-danger" onclick="deleteForm(${form.id})" title="Excluir Formulário">
+                <button type="button" class="btn-secondary btn-icon-only" onclick="deleteForm(${form.id})" title="Excluir formulário">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -5447,11 +5626,12 @@ function loadApiTab() {
             apiEndpointsList.appendChild(endpointItem);
         });
     }
+
 }
 
 // Função para carregar aba de automações
 function loadAutomationTab() {
-    const automationRules = document.getElementById('automationRules');
+    const automationRules = document.getElementById('configAutomationRules');
     if (!automationRules) return;
     
     automationRules.innerHTML = `
@@ -5639,30 +5819,31 @@ function openFormModal() {
     
     const modal = document.createElement('div');
     modal.id = 'formModal';
-    modal.className = 'modal';
+    modal.className = 'modal forms-new-modal';
     modal.style.display = 'flex';
     
     modal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content modal-content--forms-new">
             <div class="modal-header">
-                <h3>Novo Formulário</h3>
-                <button class="close-btn" onclick="closeFormModal()">
+                <h3>Novo formulário</h3>
+                <button type="button" class="close-btn" onclick="closeFormModal()" aria-label="Fechar">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
+                <p class="forms-modal-lead">Só o nome é obrigatório. Depois de salvar, abra <strong>Editar</strong> na lista para adicionar campos.</p>
                 <div class="form-group">
-                    <label for="${formNameId}">Nome do Formulário:</label>
-                    <input type="text" id="${formNameId}" placeholder="Ex: Formulário de Suporte">
+                    <label for="${formNameId}">Nome <span class="label-req">obrigatório</span></label>
+                    <input type="text" id="${formNameId}" placeholder="Ex.: Triagem N1, Onboarding, Suporte técnico" autocomplete="off">
                 </div>
                 <div class="form-group">
-                    <label for="${formDescriptionId}">Descrição:</label>
-                    <textarea id="${formDescriptionId}" placeholder="Descreva o propósito do formulário"></textarea>
+                    <label for="${formDescriptionId}">Descrição <span class="label-opt">opcional</span></label>
+                    <textarea id="${formDescriptionId}" rows="3" placeholder="Quando usar este modelo? Ex.: tickets vindos do WhatsApp."></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeFormModal()">Cancelar</button>
-                <button class="btn-primary" id="${saveBtnId}" type="button">Salvar Formulário</button>
+                <button type="button" class="btn-secondary" onclick="closeFormModal()">Cancelar</button>
+                <button type="button" class="btn-primary" id="${saveBtnId}">Salvar e voltar à lista</button>
             </div>
         </div>
     `;
@@ -5778,9 +5959,13 @@ function saveForm(formNameId, formDescriptionId) {
     
     closeFormModal();
     
-    // Aguardar um pouco antes de recarregar para garantir que o modal foi fechado
+    // Reabrir aba Formulários (ativa painel + menu) e recarregar lista para o novo item aparecer
     setTimeout(() => {
-        loadFormsTab();
+        if (typeof switchConfigTab === 'function') {
+            switchConfigTab('forms');
+        } else {
+            loadFormsTab();
+        }
         const msg = 'Formulário criado com sucesso!';
         if (typeof showNotification === 'function') {
             showNotification(msg, 'success');
@@ -5805,40 +5990,51 @@ function editForm(formId) {
     // Criar modal de edição
     const modal = document.createElement('div');
     modal.id = 'editFormModal';
-    modal.className = 'modal';
+    modal.className = 'modal forms-editor-modal';
     modal.style.display = 'flex';
     
     modal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content modal-content--forms-editor modal--ticket-size">
             <div class="modal-header">
-                <h3>Editar Formulário: ${form.name}</h3>
-                <button class="close-btn" onclick="closeEditFormModal()">
+                <h3>Editar formulário</h3>
+                <button type="button" class="close-btn" onclick="closeEditFormModal()" aria-label="Fechar">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="editFormName">Nome do Formulário:</label>
-                    <input type="text" id="editFormName" value="${form.name}" placeholder="Ex: Formulário de Suporte">
-                </div>
-                <div class="form-group">
-                    <label for="editFormDescription">Descrição:</label>
-                    <textarea id="editFormDescription" placeholder="Descreva o propósito do formulário">${form.description || ''}</textarea>
-                </div>
-                
-                <div class="form-fields-section">
-                    <h4>Campos do Formulário</h4>
-                    <div class="fields-list" id="editFieldsList">
-                        ${renderFormFieldsForEdit(form.fields)}
-                    </div>
-                    <button type="button" class="btn-primary" onclick="addFieldToEditForm()">
-                        <i class="fas fa-plus"></i> Adicionar Campo
-                    </button>
+            <div class="modal-body modal-body--forms-editor modal-body--ticket-like">
+                <p class="forms-editor-subtitle">${escapeHtml(form.name)}</p>
+                <div class="forms-editor-grid">
+                    <section class="forms-editor-card" aria-labelledby="forms-edit-section-ident">
+                        <h4 id="forms-edit-section-ident" class="forms-editor-card-title">
+                            <span class="forms-editor-step">1</span> Identificação
+                        </h4>
+                        <p class="forms-editor-card-hint">Nome e descrição ajudam o time a escolher o modelo certo.</p>
+                        <div class="form-group">
+                            <label for="editFormName">Nome do formulário</label>
+                            <input type="text" id="editFormName" value="${escapeHtml(form.name)}" placeholder="Ex.: Triagem N1">
+                        </div>
+                        <div class="form-group">
+                            <label for="editFormDescription">Descrição <span class="label-opt">opcional</span></label>
+                            <textarea id="editFormDescription" rows="2" placeholder="Quando usar este modelo?">${escapeHtml(form.description || '')}</textarea>
+                        </div>
+                    </section>
+                    <section class="forms-editor-card" aria-labelledby="forms-edit-section-fields">
+                        <h4 id="forms-edit-section-fields" class="forms-editor-card-title">
+                            <span class="forms-editor-step">2</span> Campos para o agente
+                        </h4>
+                        <p class="forms-editor-card-hint">Cada campo vira uma pergunta ou seleção no ticket. Tipos com opções (lista, rádio) pedem uma opção por linha.</p>
+                        <div class="fields-list" id="editFieldsList">
+                            ${renderFormFieldsForEdit(form.fields)}
+                        </div>
+                        <button type="button" class="btn-primary btn-add-field" onclick="addFieldToEditForm()">
+                            <i class="fas fa-plus"></i> Adicionar campo
+                        </button>
+                    </section>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeEditFormModal()">Cancelar</button>
-                <button class="btn-primary" onclick="saveEditedForm(${formId})">Salvar Alterações</button>
+                <button type="button" class="btn-secondary" onclick="closeEditFormModal()">Fechar sem salvar</button>
+                <button type="button" class="btn-primary" onclick="saveEditedForm(${formId})">Salvar alterações</button>
             </div>
         </div>
     `;
@@ -5851,26 +6047,45 @@ function editForm(formId) {
 
 function renderFormFieldsForEdit(fields) {
     if (!fields || fields.length === 0) {
-        return '<p class="no-fields">Nenhum campo adicionado ainda.</p>';
+        return `
+            <div class="forms-fields-empty">
+                <i class="fas fa-magic" aria-hidden="true"></i>
+                <p class="forms-fields-empty-title">Nenhum campo ainda</p>
+                <p class="forms-fields-empty-text">Use <strong>Adicionar campo</strong> para incluir texto, lista, data, e-mail ou árvore de opções.</p>
+            </div>
+        `;
     }
     
-    return fields.map((field, index) => `
-        <div class="field-item" data-field-index="${index}">
-            <div class="field-info">
-                <h5>${field.label}</h5>
-                <p>Tipo: ${getFieldTypeName(field.type)} | Obrigatório: ${field.required ? 'Sim' : 'Não'}</p>
-                ${field.options ? `<p>Opções: ${field.options.join(', ')}</p>` : ''}
+    return fields.map((field, index) => {
+        const label = escapeHtml(field.label || '(sem rótulo)');
+        const typeIcon = getFieldTypeIcon(field.type);
+        const optsPreview = field.options && field.options.length
+            ? `<span class="field-meta-line">${escapeHtml(field.options.slice(0, 3).join(', '))}${field.options.length > 3 ? '…' : ''}</span>`
+            : '';
+        return `
+        <div class="field-item field-item-card" data-field-index="${index}">
+            <div class="field-item-card-main">
+                <span class="field-item-type-icon" aria-hidden="true"><i class="fas ${typeIcon}"></i></span>
+                <div class="field-info">
+                    <h5 class="field-item-label">${label}</h5>
+                    <div class="field-item-badges">
+                        <span class="field-badge field-badge--type">${getFieldTypeName(field.type)}</span>
+                        <span class="field-badge ${field.required ? 'field-badge--req' : 'field-badge--opt'}">${field.required ? 'Obrigatório' : 'Opcional'}</span>
+                    </div>
+                    ${optsPreview ? `<div class="field-meta">${optsPreview}</div>` : ''}
+                </div>
             </div>
             <div class="field-actions">
-                <button class="btn-secondary" onclick="editFormField(${index})">
-                    <i class="fas fa-edit"></i>
+                <button type="button" class="btn-secondary btn-sm" onclick="editFormField(${index})" title="Editar campo">
+                    <i class="fas fa-edit"></i> Editar
                 </button>
-                <button class="btn-danger" onclick="removeFormField(${index})">
+                <button type="button" class="btn-danger btn-sm btn-icon-only" onclick="removeFormField(${index})" title="Remover campo">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function getFieldTypeName(type) {
@@ -5888,6 +6103,23 @@ function getFieldTypeName(type) {
         'number': 'Número'
     };
     return typeNames[type] || type;
+}
+
+function getFieldTypeIcon(type) {
+    const icons = {
+        'text': 'fa-font',
+        'textarea': 'fa-align-left',
+        'select': 'fa-list-ul',
+        'tree': 'fa-sitemap',
+        'tree-select': 'fa-stream',
+        'tree-sequential': 'fa-project-diagram',
+        'checkbox': 'fa-check-square',
+        'radio': 'fa-dot-circle',
+        'date': 'fa-calendar-alt',
+        'email': 'fa-envelope',
+        'number': 'fa-hashtag'
+    };
+    return icons[type] || 'fa-i-cursor';
 }
 
 function closeEditFormModal() {
@@ -5969,24 +6201,24 @@ function addFieldToEditForm() {
     // Criar modal para adicionar campo
     const fieldModal = document.createElement('div');
     fieldModal.id = 'addFieldModal';
-    fieldModal.className = 'modal';
+    fieldModal.className = 'modal forms-field-modal forms-tree-edit-modal';
     fieldModal.style.display = 'flex';
-    
     fieldModal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content modal-content--forms-field modal-content--tree-modal modal--ticket-size">
             <div class="modal-header">
-                <h3>Adicionar Campo</h3>
-                <button class="close-btn" onclick="closeAddFieldModal()">
+                <h3>Novo campo</h3>
+                <button type="button" class="close-btn" onclick="closeAddFieldModal()" aria-label="Fechar">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body modal-body--tree-field">
+                <p class="forms-modal-lead forms-modal-lead--compact">O <strong>rótulo</strong> é a pergunta no ticket. O <strong>tipo</strong> define como o agente responde.</p>
                 <div class="form-group">
-                    <label for="${fieldLabelId}">Rótulo do Campo:</label>
-                    <input type="text" id="${fieldLabelId}" placeholder="Ex: Categoria">
+                    <label for="${fieldLabelId}">Rótulo (pergunta no ticket)</label>
+                    <input type="text" id="${fieldLabelId}" placeholder="Ex.: Categoria, Prioridade, Produto">
                 </div>
                 <div class="form-group">
-                    <label for="${fieldTypeId}">Tipo do Campo:</label>
+                    <label for="${fieldTypeId}">Tipo do campo</label>
                     <select id="${fieldTypeId}">
                         <option value="text">Texto</option>
                         <option value="textarea">Área de Texto</option>
@@ -6007,25 +6239,22 @@ function addFieldToEditForm() {
                     <label for="${fieldOptionsId}">Opções (uma por linha):</label>
                     <textarea id="${fieldOptionsId}" rows="4" placeholder="Opção 1&#10;Opção 2&#10;Opção 3"></textarea>
                 </div>
-                <div class="form-group" id="treeConfigGroup-${timestamp}" style="display: none;">
-                    <label>Configuração da Árvore Sequencial:</label>
-                    <div class="tree-config-container" style="border: 1px solid #ddd; padding: 15px; border-radius: 6px; background: #f8f9fa;">
-                        <div class="tree-explanation" style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-radius: 4px;">
-                            <p style="margin: 0; font-size: 13px;"><strong>Como funciona:</strong> Campos aparecem sequencialmente. Ao selecionar uma opção, o próximo nível aparece automaticamente.</p>
+                <div class="form-group tree-config-group-wrap" id="treeConfigGroup-${timestamp}" style="display: none;">
+                    <label class="tree-config-label">Árvore sequencial (estilo Zendesk)</label>
+                    <div class="tree-config-container">
+                        <p class="tree-config-lead">Cada <strong>raiz</strong> é a primeira lista no ticket. Use <strong>Filho</strong> para criar o próximo nível quando o agente escolher uma opção.</p>
+                        <div class="tree-builder-toolbar">
+                            <button type="button" class="btn-primary tree-toolbar-btn" onclick="addTreeRootToModal('${timestamp}')">
+                                <i class="fas fa-plus-circle"></i> Raiz
+                            </button>
+                            <button type="button" class="btn-secondary tree-toolbar-btn" onclick="previewTreeInModal('${timestamp}')">
+                                <i class="fas fa-eye"></i> Pré-visualizar
+                            </button>
                         </div>
-                        <div class="tree-builder" id="treeBuilder-${timestamp}">
-                            <div class="tree-header" style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                <button type="button" class="btn-primary" onclick="addTreeRootToModal('${timestamp}')" style="padding: 8px 16px; font-size: 13px;">
-                                    <i class="fas fa-plus"></i> Adicionar Raiz
-                                </button>
-                                <button type="button" class="btn-secondary" onclick="previewTreeInModal('${timestamp}')" style="padding: 8px 16px; font-size: 13px;">
-                                    <i class="fas fa-eye"></i> Visualizar
-                                </button>
-                            </div>
-                            <div class="tree-structure" id="treeStructure-${timestamp}" style="min-height: 100px; padding: 10px; background: white; border-radius: 4px;">
-                                <p style="color: #999; font-size: 12px; margin: 0;">Nenhuma raiz adicionada ainda. Clique em "Adicionar Raiz" para começar.</p>
-                            </div>
+                        <div class="tree-structure tree-structure-panel" id="treeStructure-${timestamp}">
+                            <p class="tree-empty-hint">Nenhuma raiz ainda. Use <strong>+ Raiz</strong> para começar e <strong>Filho</strong> para cada nível abaixo.</p>
                         </div>
+                        <div id="treePreviewPanel-${timestamp}" class="tree-preview-panel" hidden></div>
                     </div>
                 </div>
             </div>
@@ -6164,6 +6393,21 @@ function saveNewField(fieldLabelId, fieldTypeId, fieldRequiredId, fieldOptionsId
         }
     }
     
+    if (type === 'tree-sequential') {
+        const addModal = document.getElementById('addFieldModal');
+        const ts = addModal ? addModal.dataset.timestamp : null;
+        if (!ts) {
+            showNotification('Erro ao ler o construtor da árvore.', 'error');
+            return;
+        }
+        const treeStructure = getTreeStructureFromModalBuilder(ts);
+        if (!treeStructure || treeStructure.length === 0) {
+            showNotification('Adicione pelo menos uma raiz na árvore sequencial.', 'error');
+            return;
+        }
+        newField.config = { treeStructure };
+    }
+    
     // Adicionar campo ao formulário em edição
     const success = addFieldToCurrentForm(newField);
     
@@ -6278,7 +6522,7 @@ function editFormField(fieldIndex) {
     // Criar modal para editar campo
     const fieldModal = document.createElement('div');
     fieldModal.id = 'editFieldModal';
-    fieldModal.className = 'modal';
+    fieldModal.className = 'modal forms-field-modal forms-tree-edit-modal';
     fieldModal.style.display = 'flex';
     
     // Preparar opções para textarea se necessário
@@ -6286,15 +6530,16 @@ function editFormField(fieldIndex) {
         ? field.options.join('\n') 
         : '';
     
+    const treeCfgDisplay = field.type === 'tree-sequential' ? 'block' : 'none';
     fieldModal.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content modal-content--forms-field modal-content--tree-modal modal--ticket-size">
             <div class="modal-header">
-                <h3>Editar Campo</h3>
-                <button class="close-btn" onclick="closeEditFieldModal()">
+                <h3>Editar campo</h3>
+                <button type="button" class="close-btn" onclick="closeEditFieldModal()" aria-label="Fechar">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body modal-body--tree-field">
                 <div class="form-group">
                     <label for="${fieldLabelId}">Rótulo do Campo:</label>
                     <input type="text" id="${fieldLabelId}" value="${escapeHtml(field.label || '')}" placeholder="Ex: Categoria">
@@ -6321,10 +6566,28 @@ function editFormField(fieldIndex) {
                     <label for="${fieldOptionsId}">Opções (uma por linha):</label>
                     <textarea id="${fieldOptionsId}" rows="4" placeholder="Opção 1&#10;Opção 2&#10;Opção 3">${escapeHtml(optionsText)}</textarea>
                 </div>
+                <div class="form-group tree-config-group-wrap" id="editTreeConfigGroup-${timestamp}" style="display: ${treeCfgDisplay};">
+                    <label class="tree-config-label">Árvore sequencial</label>
+                    <div class="tree-config-container">
+                        <p class="tree-config-lead">Edite os textos nas caixas. <strong>Filho</strong> adiciona o próximo nível; <strong>Remover</strong> apaga o ramo inteiro.</p>
+                        <div class="tree-builder-toolbar">
+                            <button type="button" class="btn-primary tree-toolbar-btn" onclick="addTreeRootToEditModal('${timestamp}')">
+                                <i class="fas fa-plus-circle"></i> Raiz
+                            </button>
+                            <button type="button" class="btn-secondary tree-toolbar-btn" onclick="previewTreeInEditModal('${timestamp}')">
+                                <i class="fas fa-eye"></i> Pré-visualizar
+                            </button>
+                        </div>
+                        <div class="tree-structure tree-structure-panel" id="editTreeStructure-${timestamp}">
+                            <p class="tree-empty-hint">Nenhuma raiz ainda. Use <strong>+ Raiz</strong> para começar.</p>
+                        </div>
+                        <div id="editTreePreviewPanel-${timestamp}" class="tree-preview-panel" hidden></div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeEditFieldModal()">Cancelar</button>
-                <button class="btn-primary" id="${saveEditFieldBtnId}" type="button">Salvar Alterações</button>
+                <button type="button" class="btn-secondary" onclick="closeEditFieldModal()">Cancelar</button>
+                <button type="button" class="btn-primary" id="${saveEditFieldBtnId}">Salvar Alterações</button>
             </div>
         </div>
     `;
@@ -6368,6 +6631,10 @@ function editFormField(fieldIndex) {
             e.stopPropagation();
             saveEditedField(fieldIndex, fieldLabelId, fieldTypeId, fieldRequiredId, fieldOptionsId);
         });
+    }
+    
+    if (field.type === 'tree-sequential' && field.config && field.config.treeStructure && field.config.treeStructure.length) {
+        loadTreeStructureToEditModal(timestamp, field.config.treeStructure);
     }
     
     // Focar no campo de rótulo
@@ -8027,12 +8294,214 @@ function savePasswordSetup(token, email) {
 
 // Função para carregar relatórios
 function loadReports() {
-    console.log('Carregando relatórios...');
+    const saved = localStorage.getItem('importedTickets');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+                allImportedTickets = parsed;
+                importedTickets = [...allImportedTickets];
+            }
+        } catch (e) {
+            console.warn('Erro ao ler importedTickets:', e);
+        }
+    }
+
+    const activeBtn = document.querySelector('#reports .report-tab.active');
+    const tabName = activeBtn ? activeBtn.getAttribute('data-tab') : 'import';
+
+    const refreshChartsWhenVisible = (fn) => {
+        requestAnimationFrame(() => {
+            setTimeout(fn, 50);
+        });
+    };
+
+    if (tabName === 'reading') {
+        displayImportedTickets();
+        updateReadingFilters();
+        updateReadingStats();
+        const chartsEl = document.getElementById('readingCharts');
+        if (chartsEl && chartsEl.style.display !== 'none' && importedTickets.length > 0) {
+            refreshChartsWhenVisible(() => updateCharts());
+        }
+    } else if (tabName === 'performance') {
+        refreshChartsWhenVisible(() => updatePerformanceCharts());
+    } else if (tabName === 'agents') {
+        refreshChartsWhenVisible(() => updateAgentsCharts());
+    } else if (tabName === 'satisfaction') {
+        refreshChartsWhenVisible(() => updateSatisfactionCharts());
+    }
+}
+
+function hasVelodeskTestConversationsInStorage() {
+    try {
+        const raw = localStorage.getItem('whatsappConversations');
+        if (!raw) return false;
+        const convs = JSON.parse(raw);
+        if (!Array.isArray(convs)) return false;
+        return convs.some(c => c && String(c.id).startsWith('velodesk_test_'));
+    } catch (e) {
+        return false;
+    }
+}
+
+// Conversas de teste (ids fixos) — inseridas se ainda não existirem, para testes no Chat
+function ensureVelodeskTestWhatsAppConversations() {
+    const testIds = ['velodesk_test_1', 'velodesk_test_2', 'velodesk_test_3'];
+    let list = [];
+    try {
+        const raw = localStorage.getItem('whatsappConversations');
+        if (raw) list = JSON.parse(raw);
+        if (!Array.isArray(list)) list = [];
+    } catch (e) {
+        list = [];
+    }
+    const byId = new Set(list.map(c => String(c && c.id)));
+    const tests = [
+        {
+            id: 'velodesk_test_1',
+            name: 'Teste — Cliente Suporte',
+            phone: '+5511987654321',
+            lastMessage: 'Olá, preciso de ajuda com meu chamado aberto ontem.',
+            lastMessageTime: new Date().toISOString(),
+            unread: 1,
+            isGroup: false
+        },
+        {
+            id: 'velodesk_test_2',
+            name: 'Teste — Vendas',
+            phone: '+5511976543210',
+            lastMessage: 'Pode confirmar o prazo de entrega do pedido?',
+            lastMessageTime: new Date(Date.now() - 1800000).toISOString(),
+            unread: 0,
+            isGroup: false
+        },
+        {
+            id: 'velodesk_test_3',
+            name: 'Teste — Grupo Interno',
+            phone: null,
+            lastMessage: 'Coordenação: reunião às 15h.',
+            lastMessageTime: new Date(Date.now() - 3600000).toISOString(),
+            unread: 2,
+            isGroup: true
+        }
+    ];
+    let changed = false;
+    tests.forEach(t => {
+        if (!byId.has(String(t.id))) {
+            list.push(t);
+            byId.add(String(t.id));
+            changed = true;
+        }
+    });
+    if (changed) {
+        localStorage.setItem('whatsappConversations', JSON.stringify(list));
+    }
+    const settings = JSON.parse(localStorage.getItem('whatsappSettings') || '{}');
+    settings.connected = true;
+    localStorage.setItem('whatsappSettings', JSON.stringify(settings));
+
+    testIds.forEach(id => seedVelodeskExampleMessagesIfEmpty(id));
+}
+
+const WHATSAPP_LOCAL_MESSAGES_KEY = 'whatsappConversationMessages';
+
+const VELBOT_RANDOM_REPLIES = [
+    'Recebido! Vou verificar isso para você.',
+    'Entendi. Um momento, por favor.',
+    'Obrigado pela mensagem! Em breve retorno.',
+    'Certo! Posso ajudar com mais alguma coisa?',
+    'Ok, anotei aqui. Qualquer novidade eu aviso.',
+    'Oi! Estou aqui para ajudar.',
+    'Perfeito, vamos resolver isso juntos.',
+    'Mensagem registrada. Nossa equipe acompanha o chamado.',
+    'Obrigado pelo contato! 😊',
+    'Vou encaminhar para análise e já te retorno.'
+];
+
+function getAllLocalMessagesMap() {
+    try {
+        const raw = localStorage.getItem(WHATSAPP_LOCAL_MESSAGES_KEY);
+        const map = raw ? JSON.parse(raw) : {};
+        return map && typeof map === 'object' ? map : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function getStoredMessages(conversationId) {
+    const map = getAllLocalMessagesMap();
+    const arr = map[String(conversationId)];
+    return Array.isArray(arr) ? arr : [];
+}
+
+function setStoredMessages(conversationId, messages) {
+    const map = getAllLocalMessagesMap();
+    map[String(conversationId)] = messages;
+    localStorage.setItem(WHATSAPP_LOCAL_MESSAGES_KEY, JSON.stringify(map));
+}
+
+function seedVelodeskExampleMessagesIfEmpty(conversationId) {
+    const cid = String(conversationId);
+    if (getStoredMessages(cid).length > 0) return;
+    const starter = [
+        {
+            id: 'seed_' + Date.now(),
+            text: 'Olá! Esta é uma conversa de exemplo. Envie uma mensagem para receber respostas automáticas aleatórias.',
+            sender: 'them',
+            time: new Date(Date.now() - 7200000).toISOString()
+        },
+        {
+            id: 'seed2_' + Date.now(),
+            text: 'O histórico fica salvo no navegador — você pode recarregar a página ou sair do menu e voltar sem perder as mensagens.',
+            sender: 'them',
+            time: new Date(Date.now() - 7100000).toISOString()
+        }
+    ];
+    setStoredMessages(cid, starter);
+}
+
+function handleLocalWhatsAppSend(conversationId, messageText) {
+    const cid = String(conversationId);
+    const userMsg = {
+        id: 'me_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+        text: messageText,
+        sender: 'me',
+        time: new Date().toISOString()
+    };
+    const msgs = getStoredMessages(cid);
+    msgs.push(userMsg);
+    setStoredMessages(cid, msgs);
+    updateConversationLastMessage(cid, messageText);
+
+    if (currentConversation && String(currentConversation.id) === cid) {
+        displayMessages(msgs);
+    }
+
+    const delay = 600 + Math.random() * 2200;
+    setTimeout(() => {
+        const replyText = VELBOT_RANDOM_REPLIES[Math.floor(Math.random() * VELBOT_RANDOM_REPLIES.length)];
+        const replyMsg = {
+            id: 'them_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+            text: replyText,
+            sender: 'them',
+            time: new Date().toISOString()
+        };
+        const all = getStoredMessages(cid);
+        all.push(replyMsg);
+        setStoredMessages(cid, all);
+        updateConversationLastMessage(cid, replyText);
+        if (currentConversation && String(currentConversation.id) === cid) {
+            displayMessages(all);
+        }
+    }, delay);
 }
 
 // Função para carregar chat
 function loadChat() {
     console.log('=== loadChat chamada ===');
+    
+    ensureVelodeskTestWhatsAppConversations();
     
     // Verificar status da conexão
     checkWhatsAppConnectionStatus();
@@ -8094,6 +8563,14 @@ function checkWhatsAppConnectionStatus() {
             } else {
                 console.log('WhatsApp NÃO está conectado no backend');
                 
+                if (hasVelodeskTestConversationsInStorage()) {
+                    ensureVelodeskTestWhatsAppConversations();
+                    if (notConnectedDiv) notConnectedDiv.style.display = 'none';
+                    if (connectedDiv) connectedDiv.style.display = 'flex';
+                    setTimeout(() => reloadSavedConversations(), 300);
+                    return;
+                }
+                
                 // Atualizar localStorage
                 const settings = JSON.parse(localStorage.getItem('whatsappSettings') || '{}');
                 settings.connected = false;
@@ -8122,6 +8599,11 @@ function checkWhatsAppConnectionStatus() {
                 setTimeout(() => {
                     reloadSavedConversations();
                 }, 500);
+            } else if (hasVelodeskTestConversationsInStorage()) {
+                ensureVelodeskTestWhatsAppConversations();
+                if (notConnectedDiv) notConnectedDiv.style.display = 'none';
+                if (connectedDiv) connectedDiv.style.display = 'flex';
+                setTimeout(() => reloadSavedConversations(), 500);
             } else {
                 if (notConnectedDiv) notConnectedDiv.style.display = 'block';
                 if (connectedDiv) connectedDiv.style.display = 'none';
@@ -12304,31 +12786,36 @@ function loadConversationMessages(conversationId) {
             console.log('Número de mensagens:', messages?.length || 0);
             
             if (!messages || messages.length === 0) {
+                const localFallback = getStoredMessages(conversationId);
+                if (localFallback.length > 0) {
+                    lastMessageTimestamp = localFallback[localFallback.length - 1].time;
+                    displayMessages(localFallback);
+                    startMessageAutoRefresh(conversationId);
+                    return;
+                }
                 console.log('Nenhuma mensagem encontrada, exibindo conversa vazia');
-                // Mesmo sem mensagens, permitir que o usuário envie mensagens
                 displayMessages([]);
                 showNotification('Conversa aberta. Você pode começar a conversar!', 'info');
                 lastMessageTimestamp = null;
             } else {
-                // Armazenar timestamp da última mensagem para verificar novas
+                setStoredMessages(conversationId, messages);
                 if (messages.length > 0) {
                     lastMessageTimestamp = messages[messages.length - 1].time;
                 }
                 displayMessages(messages);
-                
-                // Iniciar atualização em tempo real
                 startMessageAutoRefresh(conversationId);
             }
         })
         .catch(error => {
-            console.log('Erro ao carregar mensagens:', error);
-            if (error.message.includes('não está conectado') || error.message.includes('503')) {
-                showNotification('WhatsApp não está conectado. Conecte primeiro no backend.', 'warning');
-                messagesContainer.innerHTML = '<div class="no-conversation"><i class="fab fa-whatsapp"></i><h3>WhatsApp não conectado</h3><p>Conecte o WhatsApp no backend primeiro</p></div>';
-            } else {
-                // Usar mensagens de exemplo quando backend não está disponível
-                const exampleMessages = generateExampleMessages(conversationId);
-                displayMessages(exampleMessages);
+            console.log('Erro ao carregar mensagens (usando histórico local se existir):', error);
+            let localMessages = getStoredMessages(conversationId);
+            if (!localMessages.length) {
+                localMessages = generateExampleMessages(conversationId);
+                setStoredMessages(conversationId, localMessages);
+            }
+            displayMessages(localMessages);
+            if (localMessages.length > 0) {
+                lastMessageTimestamp = localMessages[localMessages.length - 1].time;
             }
         });
 }
@@ -12362,6 +12849,18 @@ function generateExampleMessages(conversationId) {
             { id: 1, text: 'Carlos: Alguém pode ajudar?', sender: 'them', time: new Date(Date.now() - 10800000).toISOString() },
             { id: 2, text: 'Sim, como posso ajudar?', sender: 'me', time: new Date(Date.now() - 10500000).toISOString() },
             { id: 3, text: 'Maria: Eu também preciso de ajuda', sender: 'them', time: new Date(Date.now() - 10200000).toISOString() }
+        ],
+        velodesk_test_1: [
+            { id: 1, text: 'Olá! Esta é uma conversa de exemplo. Envie uma mensagem para testar respostas automáticas.', sender: 'them', time: new Date(Date.now() - 7200000).toISOString() },
+            { id: 2, text: 'O histórico permanece salvo ao recarregar ou mudar de menu.', sender: 'them', time: new Date(Date.now() - 7100000).toISOString() }
+        ],
+        velodesk_test_2: [
+            { id: 1, text: 'Bom dia! Posso ajudar com vendas ou pedidos.', sender: 'them', time: new Date(Date.now() - 5400000).toISOString() },
+            { id: 2, text: 'Digite abaixo para receber uma resposta aleatória de teste.', sender: 'them', time: new Date(Date.now() - 5300000).toISOString() }
+        ],
+        velodesk_test_3: [
+            { id: 1, text: 'Grupo interno — avisos e testes.', sender: 'them', time: new Date(Date.now() - 4800000).toISOString() },
+            { id: 2, text: 'Mensagens aqui também ficam persistidas no navegador.', sender: 'them', time: new Date(Date.now() - 4700000).toISOString() }
         ]
     };
     
@@ -12994,37 +13493,10 @@ function sendWhatsAppMessage() {
         return;
     }
     
-    const messagesContainer = document.getElementById('chatMessages');
-    if (!messagesContainer) return;
-    
-    // Criar elemento de mensagem
-    const messageWrapper = document.createElement('div');
-    messageWrapper.className = 'message-wrapper sent';
-    
-    const messageBubble = document.createElement('div');
-    messageBubble.className = 'message-bubble';
-    
-    const messageText = document.createElement('p');
-    messageText.className = 'message-text';
-    messageText.textContent = message;
-    
-    const messageTime = document.createElement('div');
-    messageTime.className = 'message-time';
-    const now = new Date();
-    messageTime.textContent = formatTime(now.toISOString());
-    
-    messageBubble.appendChild(messageText);
-    messageBubble.appendChild(messageTime);
-    messageWrapper.appendChild(messageBubble);
-    messagesContainer.appendChild(messageWrapper);
-    
-    // Scroll para o final
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    
-    // Enviar mensagem via backend (em produção)
-    sendMessageToWhatsApp(currentConversation.id, message);
+    if (!document.getElementById('chatMessages')) return;
     
     input.value = '';
+    sendMessageToWhatsApp(currentConversation.id, message);
 }
 
 // Função para enviar mensagem ao WhatsApp via backend
@@ -13067,12 +13539,8 @@ function sendMessageToWhatsApp(conversationId, message) {
         }, 500);
     })
     .catch(error => {
-        console.log('Erro ao enviar mensagem:', error);
-        if (error.message.includes('não está conectado') || error.message.includes('503')) {
-            showNotification('WhatsApp não está conectado. Conecte primeiro no backend.', 'error');
-        } else {
-            showNotification('Erro ao enviar mensagem. Verifique se o backend está rodando.', 'error');
-        }
+        console.log('Erro ao enviar mensagem (modo local):', error);
+        handleLocalWhatsAppSend(conversationId, message);
     });
 }
 
@@ -13083,7 +13551,7 @@ function updateConversationLastMessage(conversationId, message) {
     
     try {
         const conversations = JSON.parse(savedConversations);
-        const conversation = conversations.find(c => c.id === conversationId);
+        const conversation = conversations.find(c => String(c.id) === String(conversationId));
         
         if (conversation) {
             conversation.lastMessage = message;
@@ -13266,21 +13734,52 @@ function confirmNewConversation() {
     showNotification('Nova conversa iniciada. Você pode começar a enviar mensagens!', 'success');
 }
 
+// Monta o texto da conversa para anotação interna do ticket (usa o mesmo formato do histórico local)
+function buildWhatsAppConversationTextForTicket(conversation, messages) {
+    const conversationId = conversation.id;
+    let conversationText = `=== CONVERSA DO WHATSAPP ===\n`;
+    conversationText += `Contato: ${conversation.name || conversation.phone}\n`;
+    conversationText += `Número: ${conversation.phone || conversationId}\n`;
+    conversationText += `Data: ${new Date().toLocaleString('pt-BR')}\n\n`;
+    conversationText += `=== MENSAGENS ===\n\n`;
+
+    if (messages && messages.length > 0) {
+        messages.forEach(msg => {
+            const date = new Date(msg.time);
+            const dateStr = date.toLocaleString('pt-BR');
+            const sender = msg.sender === 'me' ? 'Você' : (conversation.name || conversation.phone);
+            const text = msg.text || '[Mensagem sem texto]';
+            conversationText += `[${dateStr}] ${sender}:\n${text}\n\n`;
+        });
+    } else {
+        conversationText += 'Nenhuma mensagem registrada nesta conversa.\n';
+    }
+    return conversationText;
+}
+
 // Função para criar ticket a partir da conversa do WhatsApp
 function createTicketFromWhatsApp() {
     if (!currentConversation) {
         showNotification('Selecione uma conversa primeiro para criar um ticket.', 'warning');
         return;
     }
-    
-    // Buscar mensagens da conversa atual
+
     const conversationId = currentConversation.id;
-    console.log('Criando ticket da conversa:', conversationId);
+    let messages = getStoredMessages(conversationId);
+
+    // Prioridade: histórico salvo no navegador (mesmo sem backend / sem "Failed to fetch")
+    if (messages.length > 0) {
+        console.log('Ticket WhatsApp: usando histórico local:', messages.length, 'mensagens');
+        createTicketFromWhatsAppConversation(
+            buildWhatsAppConversationTextForTicket(currentConversation, messages)
+        );
+        return;
+    }
+
+    console.log('Ticket WhatsApp: sem histórico local, tentando servidor:', conversationId);
     const backendUrl = `http://localhost:3000/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/messages`;
-    
-    // Mostrar loading
     showNotification('Carregando mensagens da conversa...', 'info');
-    
+
     fetch(backendUrl)
         .then(response => {
             if (response.ok) {
@@ -13291,40 +13790,29 @@ function createTicketFromWhatsApp() {
             }
             throw new Error('Erro ao carregar mensagens');
         })
-        .then(messages => {
-            // Formatar mensagens para a observação interna
-            let conversationText = `=== CONVERSA DO WHATSAPP ===\n`;
-            conversationText += `Contato: ${currentConversation.name || currentConversation.phone}\n`;
-            conversationText += `Número: ${currentConversation.phone || conversationId}\n`;
-            conversationText += `Data: ${new Date().toLocaleString('pt-BR')}\n\n`;
-            conversationText += `=== MENSAGENS ===\n\n`;
-            
-            if (messages && messages.length > 0) {
-                messages.forEach((msg, index) => {
-                    const date = new Date(msg.time);
-                    const dateStr = date.toLocaleString('pt-BR');
-                    const sender = msg.sender === 'me' ? 'Você' : (currentConversation.name || currentConversation.phone);
-                    const text = msg.text || '[Mensagem sem texto]';
-                    
-                    conversationText += `[${dateStr}] ${sender}:\n${text}\n\n`;
-                });
-            } else {
-                conversationText += 'Nenhuma mensagem encontrada nesta conversa.\n';
+        .then(fetched => {
+            if (fetched && fetched.length > 0) {
+                setStoredMessages(conversationId, fetched);
             }
-            
-            // Criar ticket com a conversa na observação interna
-            createTicketFromWhatsAppConversation(conversationText);
+            createTicketFromWhatsAppConversation(
+                buildWhatsAppConversationTextForTicket(currentConversation, fetched || [])
+            );
         })
         .catch(error => {
-            console.error('Erro ao carregar mensagens:', error);
-            // Mesmo com erro, criar ticket com informações básicas
-            let conversationText = `=== CONVERSA DO WHATSAPP ===\n`;
-            conversationText += `Contato: ${currentConversation.name || currentConversation.phone}\n`;
-            conversationText += `Número: ${currentConversation.phone || conversationId}\n`;
-            conversationText += `Data: ${new Date().toLocaleString('pt-BR')}\n\n`;
-            conversationText += `Erro ao carregar mensagens: ${error.message}\n`;
-            
-            createTicketFromWhatsAppConversation(conversationText);
+            console.error('Ticket WhatsApp: servidor indisponível:', error);
+            messages = getStoredMessages(conversationId);
+            if (messages.length > 0) {
+                createTicketFromWhatsAppConversation(
+                    buildWhatsAppConversationTextForTicket(currentConversation, messages)
+                );
+                return;
+            }
+            const aviso =
+                '\n\n---\nNão foi possível buscar mensagens no servidor (offline ou backend inativo). ' +
+                'O histórico do chat gravado neste navegador será incluído automaticamente quando existir.';
+            createTicketFromWhatsAppConversation(
+                buildWhatsAppConversationTextForTicket(currentConversation, []) + aviso
+            );
         });
 }
 
@@ -14218,25 +14706,116 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ========== FUNÇÕES AUXILIARES PARA TREE-SEQUENTIAL NOS MODAIS ==========
 
+function generateTreeBuilderNodeId() {
+    return 'tn_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+}
+
+function findTreeNodeInBuilder(containerElOrId, nodeId) {
+    const root = typeof containerElOrId === 'string'
+        ? document.getElementById(containerElOrId)
+        : containerElOrId;
+    if (!root || nodeId == null) return null;
+    const id = String(nodeId);
+    return root.querySelector(`[data-node-id="${id.replace(/\\/g, '\\\\')}"]`);
+}
+
+function treeBuilderNodeHtml(nodeId, timestamp, opts) {
+    const isEdit = opts && opts.isEditModal;
+    const defaultLabel = (opts && opts.defaultLabel) != null ? opts.defaultLabel : '';
+    const isRoot = opts && opts.isRoot;
+    const addFn = isEdit ? 'addTreeChildToEditModal' : 'addTreeChildToModal';
+    const remFn = isEdit ? 'removeTreeNodeFromEditModal' : 'removeTreeNodeFromModal';
+    const badge = isRoot
+        ? '<span class="tree-node-pill tree-node-pill--root">Raiz</span>'
+        : '<span class="tree-node-pill">Filho</span>';
+    return `
+        <div class="tree-node ${isRoot ? 'tree-node--root' : 'tree-node--child'}" data-node-id="${nodeId}">
+            <div class="tree-node-row">
+                ${badge}
+                <input type="text" class="tree-node-label tree-input" value="${escapeHtml(String(defaultLabel))}" placeholder="${isRoot ? 'Ex.: Produto, Canal, Tema…' : 'Ex.: Sub-opção'}" autocomplete="off">
+                <div class="tree-node-actions">
+                    <button type="button" class="tree-btn tree-btn-add" onclick="${addFn}('${nodeId}', '${timestamp}')" title="Adicionar opção abaixo desta">
+                        <i class="fas fa-plus"></i><span>Filho</span>
+                    </button>
+                    <button type="button" class="tree-btn tree-btn-remove" onclick="${remFn}('${nodeId}', '${timestamp}')" title="Remover este item e os níveis abaixo">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="tree-node-child tree-node-children-stack"></div>
+        </div>
+    `;
+}
+
+function treeBuilderRootBlockWrap(innerHtml) {
+    return `
+        <div class="tree-root-block tree-root-block--expanded">
+            <button type="button" class="tree-root-header" onclick="toggleTreeRootBlock(this)" title="Mostrar ou ocultar esta raiz e os níveis abaixo">
+                <i class="fas fa-sitemap tree-root-icon" aria-hidden="true"></i>
+                <span class="tree-root-title">Opção raiz</span>
+                <i class="fas fa-chevron-down tree-root-chevron" aria-hidden="true"></i>
+            </button>
+            <div class="tree-root-inner">
+                ${innerHtml}
+            </div>
+        </div>
+    `;
+}
+
+function toggleTreeRootBlock(headerBtn) {
+    const block = headerBtn && headerBtn.closest('.tree-root-block');
+    if (!block) return;
+    block.classList.toggle('tree-root-block--expanded');
+    if (block.classList.contains('tree-root-block--expanded')) {
+        const inp = block.querySelector('.tree-root-inner .tree-node--root .tree-node-label');
+        if (inp) {
+            setTimeout(() => inp.focus(), 50);
+        }
+    }
+}
+
+function renderTreePreviewListHtml(nodes) {
+    if (!nodes || !nodes.length) return '<p class="tree-preview-empty">Nada para mostrar.</p>';
+    let html = '<ul class="tree-preview-ul">';
+    nodes.forEach(n => {
+        html += '<li><span class="tree-preview-label">' + escapeHtml(n.label || '') + '</span>';
+        if (n.children && n.children.length) {
+            html += renderTreePreviewListHtml(n.children);
+        }
+        html += '</li>';
+    });
+    html += '</ul>';
+    return html;
+}
+
+function collectTreeRootNodesFromContainer(treeContainer) {
+    const roots = [];
+    Array.from(treeContainer.children).forEach(el => {
+        if (el.classList.contains('tree-root-block')) {
+            const inner = el.querySelector(':scope > .tree-root-inner > .tree-node');
+            if (inner) roots.push(inner);
+        } else if (el.classList.contains('tree-node')) {
+            roots.push(el);
+        }
+    });
+    return roots;
+}
+
 // Função para obter estrutura de árvore do modal de adicionar campo
 function getTreeStructureFromModalBuilder(timestamp) {
     const treeStructure = [];
     const treeContainer = document.getElementById(`treeStructure-${timestamp}`);
     if (!treeContainer) return [];
-    
-    // Coletar apenas nós raiz
-    const rootNodes = Array.from(treeContainer.children).filter(node => 
-        node.classList.contains('tree-node') && 
-        !node.closest('.tree-node-child')
-    );
-    
+
+    const rootNodes = collectTreeRootNodesFromContainer(treeContainer);
+
     rootNodes.forEach(node => {
         const treeNode = buildTreeNodeFromElement(node);
         if (treeNode) {
             treeStructure.push(treeNode);
         }
     });
-    
+
     return treeStructure;
 }
 
@@ -14245,20 +14824,16 @@ function getTreeStructureFromEditModalBuilder(timestamp) {
     const treeStructure = [];
     const treeContainer = document.getElementById(`editTreeStructure-${timestamp}`);
     if (!treeContainer) return [];
-    
-    // Coletar apenas nós raiz
-    const rootNodes = Array.from(treeContainer.children).filter(node => 
-        node.classList.contains('tree-node') && 
-        !node.closest('.tree-node-child')
-    );
-    
+
+    const rootNodes = collectTreeRootNodesFromContainer(treeContainer);
+
     rootNodes.forEach(node => {
         const treeNode = buildTreeNodeFromElement(node);
         if (treeNode) {
             treeStructure.push(treeNode);
         }
     });
-    
+
     return treeStructure;
 }
 
@@ -14266,129 +14841,135 @@ function getTreeStructureFromEditModalBuilder(timestamp) {
 function addTreeRootToModal(timestamp) {
     const treeStructure = document.getElementById(`treeStructure-${timestamp}`);
     if (!treeStructure) return;
-    
-    const nodeId = Date.now();
-    const nodeHTML = `
-        <div class="tree-node" data-node-id="${nodeId}">
-            <input type="text" class="tree-node-label" placeholder="Digite o nome do item" value="Nova Raiz">
-            <button type="button" class="btn-small" onclick="addTreeChildToModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-plus"></i> Filho
-            </button>
-            <button type="button" class="btn-small btn-danger" onclick="removeTreeNodeFromModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="tree-node-child"></div>
-        </div>
-    `;
-    
-    // Remover mensagem de placeholder se existir
-    const placeholder = treeStructure.querySelector('p');
+
+    const nodeId = generateTreeBuilderNodeId();
+    const inner = treeBuilderNodeHtml(nodeId, timestamp, {
+        isEditModal: false,
+        defaultLabel: 'Nova raiz',
+        isRoot: true
+    });
+    const blockHtml = treeBuilderRootBlockWrap(inner);
+
+    const placeholder = treeStructure.querySelector('.tree-empty-hint, p.tree-empty-hint');
     if (placeholder) placeholder.remove();
-    
-    treeStructure.insertAdjacentHTML('beforeend', nodeHTML);
+
+    treeStructure.insertAdjacentHTML('beforeend', blockHtml);
+    const blocks = treeStructure.querySelectorAll('.tree-root-block');
+    const last = blocks[blocks.length - 1];
+    if (last) {
+        const inp = last.querySelector('.tree-node--root .tree-node-label');
+        if (inp) setTimeout(() => inp.focus(), 50);
+    }
 }
 
 // Função para adicionar raiz no modal de editar campo
 function addTreeRootToEditModal(timestamp) {
     const treeStructure = document.getElementById(`editTreeStructure-${timestamp}`);
     if (!treeStructure) return;
-    
-    const nodeId = Date.now();
-    const nodeHTML = `
-        <div class="tree-node" data-node-id="${nodeId}">
-            <input type="text" class="tree-node-label" placeholder="Digite o nome do item" value="Nova Raiz">
-            <button type="button" class="btn-small" onclick="addTreeChildToEditModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-plus"></i> Filho
-            </button>
-            <button type="button" class="btn-small btn-danger" onclick="removeTreeNodeFromEditModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="tree-node-child"></div>
-        </div>
-    `;
-    
-    // Remover mensagem de placeholder se existir
-    const placeholder = treeStructure.querySelector('p');
+
+    const nodeId = generateTreeBuilderNodeId();
+    const inner = treeBuilderNodeHtml(nodeId, timestamp, {
+        isEditModal: true,
+        defaultLabel: 'Nova raiz',
+        isRoot: true
+    });
+    const blockHtml = treeBuilderRootBlockWrap(inner);
+
+    const placeholder = treeStructure.querySelector('.tree-empty-hint, p.tree-empty-hint');
     if (placeholder) placeholder.remove();
-    
-    treeStructure.insertAdjacentHTML('beforeend', nodeHTML);
+
+    treeStructure.insertAdjacentHTML('beforeend', blockHtml);
+    const blocks = treeStructure.querySelectorAll('.tree-root-block');
+    const last = blocks[blocks.length - 1];
+    if (last) {
+        const inp = last.querySelector('.tree-node--root .tree-node-label');
+        if (inp) setTimeout(() => inp.focus(), 50);
+    }
 }
 
 // Função para adicionar filho no modal de adicionar campo
 function addTreeChildToModal(parentId, timestamp) {
-    const parentNode = document.querySelector(`[data-node-id="${parentId}"]`);
+    const container = document.getElementById(`treeStructure-${timestamp}`);
+    const parentNode = findTreeNodeInBuilder(container, parentId);
     if (!parentNode) return;
-    
+
     const childContainer = parentNode.querySelector('.tree-node-child');
     if (!childContainer) return;
-    
-    const nodeId = Date.now() + Math.random();
-    const nodeHTML = `
-        <div class="tree-node" data-node-id="${nodeId}">
-            <input type="text" class="tree-node-label" placeholder="Digite o nome do item" value="Novo Item">
-            <button type="button" class="btn-small" onclick="addTreeChildToModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-plus"></i> Filho
-            </button>
-            <button type="button" class="btn-small btn-danger" onclick="removeTreeNodeFromModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="tree-node-child"></div>
-        </div>
-    `;
-    
+
+    const nodeId = generateTreeBuilderNodeId();
+    const nodeHTML = treeBuilderNodeHtml(nodeId, timestamp, {
+        isEditModal: false,
+        defaultLabel: 'Nova opção',
+        isRoot: false
+    });
+
     childContainer.insertAdjacentHTML('beforeend', nodeHTML);
 }
 
 // Função para adicionar filho no modal de editar campo
 function addTreeChildToEditModal(parentId, timestamp) {
-    const parentNode = document.querySelector(`[data-node-id="${parentId}"]`);
+    const container = document.getElementById(`editTreeStructure-${timestamp}`);
+    const parentNode = findTreeNodeInBuilder(container, parentId);
     if (!parentNode) return;
-    
+
     const childContainer = parentNode.querySelector('.tree-node-child');
     if (!childContainer) return;
-    
-    const nodeId = Date.now() + Math.random();
-    const nodeHTML = `
-        <div class="tree-node" data-node-id="${nodeId}">
-            <input type="text" class="tree-node-label" placeholder="Digite o nome do item" value="Novo Item">
-            <button type="button" class="btn-small" onclick="addTreeChildToEditModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-plus"></i> Filho
-            </button>
-            <button type="button" class="btn-small btn-danger" onclick="removeTreeNodeFromEditModal(${nodeId}, '${timestamp}')">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="tree-node-child"></div>
-        </div>
-    `;
-    
+
+    const nodeId = generateTreeBuilderNodeId();
+    const nodeHTML = treeBuilderNodeHtml(nodeId, timestamp, {
+        isEditModal: true,
+        defaultLabel: 'Nova opção',
+        isRoot: false
+    });
+
     childContainer.insertAdjacentHTML('beforeend', nodeHTML);
+}
+
+function treeBuilderEmptyHintHtml() {
+    return '<p class="tree-empty-hint">Nenhuma raiz ainda. Use <strong>+ Raiz</strong> para começar e <strong>Filho</strong> para cada nível abaixo.</p>';
 }
 
 // Função para remover nó do modal de adicionar campo
 function removeTreeNodeFromModal(nodeId, timestamp) {
-    const node = document.querySelector(`[data-node-id="${nodeId}"]`);
+    const treeStructure = document.getElementById(`treeStructure-${timestamp}`);
+    const node = findTreeNodeInBuilder(treeStructure, nodeId);
     if (node) {
-        node.remove();
-        
-        // Verificar se ainda há nós raiz
-        const treeStructure = document.getElementById(`treeStructure-${timestamp}`);
-        if (treeStructure && treeStructure.children.length === 0) {
-            treeStructure.innerHTML = '<p style="color: #999; font-size: 12px; margin: 0;">Nenhuma raiz adicionada ainda. Clique em "Adicionar Raiz" para começar.</p>';
+        const rootBlock = node.closest('.tree-root-block');
+        if (rootBlock && rootBlock.querySelector('.tree-node--root') === node) {
+            rootBlock.remove();
+        } else {
+            node.remove();
         }
+    }
+    if (treeStructure && !treeStructure.querySelector(':scope > .tree-root-block, :scope > .tree-node')) {
+        treeStructure.innerHTML = treeBuilderEmptyHintHtml();
+    }
+    const preview = document.getElementById(`treePreviewPanel-${timestamp}`);
+    if (preview) {
+        preview.hidden = true;
+        preview.innerHTML = '';
     }
 }
 
 // Função para remover nó do modal de editar campo
 function removeTreeNodeFromEditModal(nodeId, timestamp) {
-    const node = document.querySelector(`[data-node-id="${nodeId}"]`);
+    const treeStructure = document.getElementById(`editTreeStructure-${timestamp}`);
+    const node = findTreeNodeInBuilder(treeStructure, nodeId);
     if (node) {
-        node.remove();
-        
-        // Verificar se ainda há nós raiz
-        const treeStructure = document.getElementById(`editTreeStructure-${timestamp}`);
-        if (treeStructure && treeStructure.children.length === 0) {
-            treeStructure.innerHTML = '<p style="color: #999; font-size: 12px; margin: 0;">Nenhuma raiz adicionada ainda. Clique em "Adicionar Raiz" para começar.</p>';
+        const rootBlock = node.closest('.tree-root-block');
+        if (rootBlock && rootBlock.querySelector('.tree-node--root') === node) {
+            rootBlock.remove();
+        } else {
+            node.remove();
         }
+    }
+    if (treeStructure && !treeStructure.querySelector(':scope > .tree-root-block, :scope > .tree-node')) {
+        treeStructure.innerHTML = treeBuilderEmptyHintHtml();
+    }
+    const preview = document.getElementById(`editTreePreviewPanel-${timestamp}`);
+    if (preview) {
+        preview.hidden = true;
+        preview.innerHTML = '';
     }
 }
 
@@ -14396,44 +14977,30 @@ function removeTreeNodeFromEditModal(nodeId, timestamp) {
 function previewTreeInModal(timestamp) {
     const treeStructure = getTreeStructureFromModalBuilder(timestamp);
     if (!treeStructure || treeStructure.length === 0) {
-        showNotification('Por favor, adicione pelo menos uma raiz na árvore!', 'warning');
+        showNotification('Adicione pelo menos uma raiz na árvore para visualizar.', 'warning');
         return;
     }
-    
-    let preview = 'Estrutura da árvore:\n\n';
-    function buildPreview(nodes, indent = '') {
-        nodes.forEach(node => {
-            preview += indent + '• ' + node.label + '\n';
-            if (node.children && node.children.length > 0) {
-                buildPreview(node.children, indent + '  ');
-            }
-        });
+    const panel = document.getElementById(`treePreviewPanel-${timestamp}`);
+    if (panel) {
+        panel.hidden = false;
+        panel.innerHTML = '<div class="tree-preview-title"><i class="fas fa-sitemap"></i> Pré-visualização</div>' +
+            renderTreePreviewListHtml(treeStructure);
     }
-    buildPreview(treeStructure);
-    
-    alert(preview);
 }
 
 // Função para visualizar árvore no modal de editar campo
 function previewTreeInEditModal(timestamp) {
     const treeStructure = getTreeStructureFromEditModalBuilder(timestamp);
     if (!treeStructure || treeStructure.length === 0) {
-        showNotification('Por favor, adicione pelo menos uma raiz na árvore!', 'warning');
+        showNotification('Adicione pelo menos uma raiz na árvore para visualizar.', 'warning');
         return;
     }
-    
-    let preview = 'Estrutura da árvore:\n\n';
-    function buildPreview(nodes, indent = '') {
-        nodes.forEach(node => {
-            preview += indent + '• ' + node.label + '\n';
-            if (node.children && node.children.length > 0) {
-                buildPreview(node.children, indent + '  ');
-            }
-        });
+    const panel = document.getElementById(`editTreePreviewPanel-${timestamp}`);
+    if (panel) {
+        panel.hidden = false;
+        panel.innerHTML = '<div class="tree-preview-title"><i class="fas fa-sitemap"></i> Pré-visualização</div>' +
+            renderTreePreviewListHtml(treeStructure);
     }
-    buildPreview(treeStructure);
-    
-    alert(preview);
 }
 
 // ========== DISCADOR FLUTUANTE 55PBX ==========
@@ -15229,38 +15796,44 @@ function closeDialerPauses() {
 function loadTreeStructureToEditModal(timestamp, treeStructure) {
     const container = document.getElementById(`editTreeStructure-${timestamp}`);
     if (!container || !treeStructure || treeStructure.length === 0) return;
-    
+
     container.innerHTML = '';
-    
-    function renderNode(node) {
-        const nodeId = node.id || Date.now() + Math.random();
-        let html = `
-            <div class="tree-node" data-node-id="${nodeId}">
-                <input type="text" class="tree-node-label" placeholder="Digite o nome do item" value="${escapeHtml(node.label || '')}">
-                <button type="button" class="btn-small" onclick="addTreeChildToEditModal(${nodeId}, '${timestamp}')">
-                    <i class="fas fa-plus"></i> Filho
-                </button>
-                <button type="button" class="btn-small btn-danger" onclick="removeTreeNodeFromEditModal(${nodeId}, '${timestamp}')">
-                    <i class="fas fa-times"></i>
-                </button>
-                <div class="tree-node-child">
-        `;
-        
-        if (node.children && node.children.length > 0) {
-            node.children.forEach(child => {
-                html += renderNode(child);
-            });
+
+    function appendNode(parentEl, node, isRoot) {
+        const nodeId = node.id != null ? String(node.id) : generateTreeBuilderNodeId();
+        const html = treeBuilderNodeHtml(nodeId, timestamp, {
+            isEditModal: true,
+            defaultLabel: node.label || '',
+            isRoot: isRoot
+        });
+        parentEl.insertAdjacentHTML('beforeend', html);
+        const nodeEl = findTreeNodeInBuilder(parentEl, nodeId);
+        if (!nodeEl) return;
+        const childBox = nodeEl.querySelector('.tree-node-child');
+        if (node.children && node.children.length > 0 && childBox) {
+            node.children.forEach(ch => appendNode(childBox, ch, false));
         }
-        
-        html += `
-                </div>
-            </div>
-        `;
-        
-        return html;
     }
-    
-    treeStructure.forEach(node => {
-        container.insertAdjacentHTML('beforeend', renderNode(node));
+
+    treeStructure.forEach(root => {
+        const nodeId = root.id != null ? String(root.id) : generateTreeBuilderNodeId();
+        const inner = treeBuilderNodeHtml(nodeId, timestamp, {
+            isEditModal: true,
+            defaultLabel: root.label || '',
+            isRoot: true
+        });
+        container.insertAdjacentHTML('beforeend', treeBuilderRootBlockWrap(inner));
+        const blocks = container.querySelectorAll('.tree-root-block');
+        const lastBlock = blocks[blocks.length - 1];
+        const innerRoot = lastBlock ? lastBlock.querySelector('.tree-root-inner') : null;
+        if (!innerRoot) return;
+        const nodeEl = findTreeNodeInBuilder(innerRoot, nodeId);
+        if (!nodeEl) return;
+        const childBox = nodeEl.querySelector('.tree-node-child');
+        if (root.children && root.children.length > 0 && childBox) {
+            root.children.forEach(ch => appendNode(childBox, ch, false));
+        }
     });
 }
+
+
