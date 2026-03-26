@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug JavaScript</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+        .test { background: #007bff; color: white; border: none; border-radius: 5px; }
+        .success { background: #28a745; color: white; }
+        .error { background: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Debug JavaScript</h1>
+    
+    <button class="test" onclick="testClick()">Teste Click</button>
+    <button class="test" onclick="testAlert()">Teste Alert</button>
+    <button class="test" onclick="testConsole()">Teste Console</button>
+    
+    <div id="result"></div>
+    
+    <script>
+        console.log('=== SCRIPT CARREGADO ===');
+        
+        function testClick() {
+            document.getElementById('result').innerHTML = '<p class="success">✅ Click funcionando!</p>';
+            console.log('Click funcionando');
+        }
+        
+        function testAlert() {
+            alert('Alert funcionando!');
+        }
+        
+        function testConsole() {
+            console.log('Console funcionando!');
+            document.getElementById('result').innerHTML = '<p class="success">✅ Console funcionando! (Verifique F12)</p>';
+        }
+        
+        // Teste automático
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM carregado');
+            document.getElementById('result').innerHTML = '<p class="success">✅ DOM carregado com sucesso!</p>';
+        });
+    </script>
+</body>
+</html>
+

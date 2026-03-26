@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Velodesk</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Tela de Login -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>Sistema Velodesk</h1>
+                <p>Faça login para continuar</p>
+            </div>
+            <div class="login-form">
+                <input type="text" id="username" placeholder="Usuário" value="admin">
+                <input type="password" id="password" placeholder="Senha" value="123">
+                <button onclick="fazerLogin()" class="btn-primary">Entrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aplicação Principal -->
+    <div id="mainApp" class="main-app" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>Sistema Velodesk</h1>
+            </div>
+            <div class="header-right">
+                <button onclick="openAIChatbot()" class="btn-secondary">
+                    <i class="fas fa-robot"></i> Assistente IA
+                </button>
+                <button onclick="logout()" class="btn-danger">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </button>
+            </div>
+        </header>
+
+        <!-- Navegação -->
+        <nav class="navigation">
+            <button onclick="navigateToPage('dashboard')" class="nav-btn active" data-page="dashboard">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </button>
+            <button onclick="navigateToPage('tickets')" class="nav-btn" data-page="tickets">
+                <i class="fas fa-ticket-alt"></i> Tickets
+            </button>
+            <button onclick="navigateToPage('config')" class="nav-btn" data-page="config">
+                <i class="fas fa-cog"></i> Configurações
+            </button>
+            <button onclick="navigateToPage('reports')" class="nav-btn" data-page="reports">
+                <i class="fas fa-chart-bar"></i> Relatórios
+            </button>
+        </nav>
+
+        <!-- Conteúdo Principal -->
+        <main class="main-content">
+            <!-- Dashboard -->
+            <div id="dashboard" class="page active">
+                <div class="page-header">
+                    <h2>Dashboard</h2>
+                </div>
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-ticket-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3 id="totalTickets">0</h3>
+                            <p>Total de Tickets</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>0</h3>
+                            <p>Em Andamento</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <h3>0</h3>
+                            <p>Resolvidos</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tickets -->
+            <div id="tickets" class="page">
+                <div class="page-header">
+                    <h2>Tickets</h2>
+                    <div class="header-actions">
+                        <button onclick="forceCreateKanbanBoxes()" class="btn-secondary">
+                            <i class="fas fa-boxes"></i> Criar Caixas Padrão
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="tickets-layout">
+                    <!-- Caixas Kanban -->
+                    <div class="boxes-panel">
+                        <div class="panel-header">
+                            <h3>Caixas Kanban</h3>
+                            <button onclick="openNewBoxModal()" class="btn-primary">
+                                <i class="fas fa-plus"></i> Nova Caixa
+                            </button>
+                        </div>
+                        <div id="boxesList" class="boxes-list">
+                            <!-- Caixas serão carregadas aqui -->
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de Tickets da Caixa Selecionada -->
+                    <div class="tickets-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                            <button id="createTicketBtn" class="btn-primary" onclick="createNewTicket()">
+                                <i class="fas fa-plus"></i> Criar Ticket
+                            </button>
+                            <button class="btn-secondary" onclick="testSimple()" style="margin-left: 10px;">
+                                <i class="fas fa-test"></i> Teste Simples
+                            </button>
+                            <button class="btn-secondary" onclick="testModal()" style="margin-left: 10px;">
+                                <i class="fas fa-eye"></i> Testar Modal
+                            </button>
+                                <button id="refreshTicketsBtn" class="btn-secondary" onclick="refreshTickets()" title="Atualizar Tickets">
+                                    <i class="fas fa-sync-alt"></i> Atualizar
+                                </button>
+                            </div>
+                            <div class="ticket-filters">
+                                <select id="sortTickets">
+                                    <option value="date">Data</option>
+                                    <option value="name">Nome</option>
+                                    <option value="update">Última Atualização</option>
+                                    <option value="group">Grupo</option>
+                                </select>
+                                <div class="search-box">
+                                    <input type="text" id="searchTickets" placeholder="Pesquisar tickets...">
+                                    <button onclick="searchTickets()">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="ticketsList" class="tickets-list">
+                            <!-- Tickets serão carregados aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configurações -->
+            <div id="config" class="page">
+                <div class="page-header">
+                    <h2>Configurações</h2>
+                </div>
+                <div class="config-content">
+                    <p>Configurações do sistema</p>
+                </div>
+            </div>
+
+            <!-- Relatórios -->
+            <div id="reports" class="page">
+                <div class="page-header">
+                    <h2>Relatórios</h2>
+                </div>
+                <div class="reports-content">
+                    <p>Relatórios do sistema</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Sistema Velodesk - Versão Limpa
+        console.log('Sistema Velodesk carregando...');
+
+        // Função de login
+        function fazerLogin() {
+            console.log('Fazendo login...');
+            const loginScreen = document.getElementById('loginScreen');
+            const mainApp = document.getElementById('mainApp');
+            
+            if (loginScreen) {
+                loginScreen.style.display = 'none';
+            }
+            
+            if (mainApp) {
+                mainApp.style.display = 'grid';
+            }
+            
+            localStorage.setItem('isLoggedIn', 'true');
+            alert('Login realizado com sucesso!');
+            
+            loadBoxes();
+            loadDashboardStats();
+        }
+
+        // Função de logout
+        function logout() {
+            localStorage.removeItem('isLoggedIn');
+            const loginScreen = document.getElementById('loginScreen');
+            const mainApp = document.getElementById('mainApp');
+            
+            if (loginScreen) {
+                loginScreen.style.display = 'flex';
+            }
+            
+            if (mainApp) {
+                mainApp.style.display = 'none';
+            }
+        }
+
+        // Função de navegação
+        function navigateToPage(page) {
+            console.log('Navegando para:', page);
+            
+            // Ocultar todas as páginas
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+            });
+            
+            // Mostrar página selecionada
+            const targetPage = document.getElementById(page);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            }
+            
+            // Carregar dados específicos da página
+            if (page === 'dashboard') {
+                loadDashboardStats();
+            } else if (page === 'tickets') {
+                loadBoxes();
+            }
+        }
+
+        // Função para carregar estatísticas do dashboard
+        function loadDashboardStats() {
+            console.log('Carregando estatísticas...');
+            
+            const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+            let totalTickets = 0;
+            
+            kanbanColumns.forEach(box => {
+                if (box.tickets) {
+                    totalTickets += box.tickets.length;
+                }
+            });
+            
+            // Atualizar elementos do dashboard
+            const totalElement = document.getElementById('totalTickets');
+            if (totalElement) {
+                totalElement.textContent = totalTickets;
+            }
+        }
+
+        // Função para carregar caixas Kanban
+        function loadBoxes() {
+            console.log('Carregando caixas...');
+            
+            const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+            
+            if (kanbanColumns.length === 0) {
+                createDefaultKanbanBoxes();
+                return;
+            }
+            
+            const boxesList = document.getElementById('boxesList');
+            if (!boxesList) {
+                console.log('Container de caixas não encontrado!');
+                return;
+            }
+            
+            boxesList.innerHTML = '';
+            
+            kanbanColumns.forEach(box => {
+                const boxElement = createKanbanBox(box);
+                boxesList.appendChild(boxElement);
+            });
+        }
+
+        // Função para criar caixa Kanban
+        function createKanbanBox(box) {
+            const boxDiv = document.createElement('div');
+            boxDiv.className = 'box-item';
+            boxDiv.setAttribute('data-box-id', box.id);
+            boxDiv.onclick = function() { selectBox(box.id); };
+            
+            boxDiv.innerHTML = `
+                <div class="box-header">
+                    <h4>${box.name}</h4>
+                    <span class="ticket-count">${box.tickets ? box.tickets.length : 0}</span>
+                </div>
+            `;
+            
+            return boxDiv;
+        }
+
+        // Função para selecionar caixa
+        function selectBox(boxId) {
+            console.log('Selecionando caixa:', boxId);
+            
+            // Remover seleção anterior
+            document.querySelectorAll('.box-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Selecionar caixa atual
+            const selectedBox = document.querySelector(`[data-box-id="${boxId}"]`);
+            if (selectedBox) {
+                selectedBox.classList.add('selected');
+            }
+            
+            // Carregar tickets da caixa
+            loadTicketsForBox(boxId);
+        }
+
+        // Função para carregar tickets de uma caixa
+        function loadTicketsForBox(boxId) {
+            console.log('Carregando tickets da caixa:', boxId);
+            
+            const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+            const box = kanbanColumns.find(b => b.id === boxId);
+            
+            if (!box) {
+                console.log('Caixa não encontrada:', boxId);
+                return;
+            }
+            
+            const ticketsList = document.getElementById('ticketsList');
+            if (!ticketsList) {
+                console.log('Lista de tickets não encontrada!');
+                return;
+            }
+            
+            if (!box.tickets || box.tickets.length === 0) {
+                ticketsList.innerHTML = '<div class="no-tickets">Nenhum ticket nesta caixa</div>';
+                return;
+            }
+            
+            ticketsList.innerHTML = '';
+            
+            box.tickets.forEach(ticket => {
+                const ticketElement = createTicketElement(ticket);
+                ticketsList.appendChild(ticketElement);
+            });
+        }
+
+        // Função para criar elemento de ticket
+        function createTicketElement(ticket) {
+            const ticketDiv = document.createElement('div');
+            ticketDiv.className = 'ticket';
+            ticketDiv.onclick = function() { openTicket(ticket.id); };
+            
+            ticketDiv.innerHTML = `
+                <h4>${ticket.title}</h4>
+                <p>${ticket.description}</p>
+                <div class="ticket-meta">
+                    <span class="ticket-status">${ticket.status}</span>
+                    <span class="ticket-date">${new Date(ticket.createdAt).toLocaleDateString()}</span>
+                </div>
+            `;
+            
+            return ticketDiv;
+        }
+
+        // Função para criar caixas Kanban padrão
+        function createDefaultKanbanBoxes() {
+            console.log('Criando caixas padrão...');
+            
+            const defaultBoxes = [
+                { id: 'novos', name: 'Novos', tickets: [] },
+                { id: 'em-andamento', name: 'Em Andamento', tickets: [] },
+                { id: 'em-espera', name: 'Em Espera', tickets: [] },
+                { id: 'resolvidos', name: 'Resolvidos', tickets: [] }
+            ];
+            
+            localStorage.setItem('kanbanColumns', JSON.stringify(defaultBoxes));
+            loadBoxes();
+        }
+
+        // Função para forçar criação de caixas Kanban
+        function forceCreateKanbanBoxes() {
+            console.log('Forçando criação de caixas Kanban...');
+            createDefaultKanbanBoxes();
+            alert('Caixas Kanban criadas com sucesso!');
+        }
+
+        // Função para abrir ticket
+        function openTicket(ticketId) {
+            console.log('Abrindo ticket:', ticketId);
+            
+            const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+            let ticket = null;
+            let box = null;
+            
+            for (const b of kanbanColumns) {
+                if (b.tickets) {
+                    ticket = b.tickets.find(t => t.id === ticketId);
+                    if (ticket) {
+                        box = b;
+                        break;
+                    }
+                }
+            }
+            
+            if (!ticket) {
+                console.log('Ticket não encontrado:', ticketId);
+                alert('Ticket não encontrado!');
+                return;
+            }
+            
+            createTicketModal(ticket, box);
+        }
+
+        // Função para criar modal de ticket
+        function createTicketModal(ticket, box) {
+            console.log('Criando modal de ticket:', ticket.title);
+            
+            // Remover modal existente
+            const existingModal = document.getElementById('ticketModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            const modal = document.createElement('div');
+            modal.id = 'ticketModal';
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; justify-content: center; align-items: center; overflow-y: auto;';
+            
+            modal.innerHTML = '<div style="background: white; border-radius: 12px; min-width: 800px; min-height: 600px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin: 20px; max-width: 90vw; max-height: 90vh; overflow-y: auto;">' +
+                '<div style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">' +
+                    '<h2 style="margin: 0; color: #333;">' + ticket.title + '</h2>' +
+                    '<button onclick="closeTicketModal()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer;">✕ Fechar</button>' +
+                '</div>' +
+                '<div style="display: flex; min-height: 500px;">' +
+                    '<div style="flex: 2; padding: 20px; border-right: 1px solid #eee;">' +
+                        '<h3 style="color: #333; margin-bottom: 15px;">Informações do Ticket</h3>' +
+                        '<div style="margin-bottom: 20px;">' +
+                            '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Título:</label>' +
+                            '<input type="text" id="ticketTitle" value="' + ticket.title + '" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;" onchange="updateTicketField(\'' + ticket.id + '\', \'title\', this.value)">' +
+                        '</div>' +
+                        '<div style="margin-bottom: 20px;">' +
+                            '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Descrição:</label>' +
+                            '<textarea id="ticketDescription" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; height: 100px;" onchange="updateTicketField(\'' + ticket.id + '\', \'description\', this.value)">' + ticket.description + '</textarea>' +
+                        '</div>' +
+                        '<div style="margin-bottom: 20px;">' +
+                            '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Status:</label>' +
+                            '<select id="ticketStatus" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;" onchange="changeTicketStatus(\'' + ticket.id + '\', this.value)">' +
+                                '<option value="novo"' + (ticket.status === 'novo' ? ' selected' : '') + '>Novo</option>' +
+                                '<option value="em-andamento"' + (ticket.status === 'em-andamento' ? ' selected' : '') + '>Em Andamento</option>' +
+                                '<option value="em-espera"' + (ticket.status === 'em-espera' ? ' selected' : '') + '>Em Espera</option>' +
+                                '<option value="resolvido"' + (ticket.status === 'resolvido' ? ' selected' : '') + '>Resolvido</option>' +
+                            '</select>' +
+                        '</div>' +
+                        '<div style="margin-bottom: 20px;">' +
+                            '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Data de Criação:</label>' +
+                            '<p style="padding: 10px; background: #f8f9fa; border-radius: 4px; margin: 0;">' + new Date(ticket.createdAt).toLocaleString() + '</p>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="flex: 1; padding: 20px; background: #f8f9fa;">' +
+                        '<h3 style="color: #333; margin-bottom: 15px;">Configurações</h3>' +
+                        '<div style="margin-bottom: 25px;">' +
+                            '<h4 style="color: #666; margin-bottom: 10px;">Informações do Cliente</h4>' +
+                            '<div style="margin-bottom: 15px;">' +
+                                '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Nome do Cliente:</label>' +
+                                '<input type="text" id="clientName" value="' + (ticket.clientName || '') + '" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="updateClientData(\'' + ticket.id + '\', \'clientName\', this.value)">' +
+                            '</div>' +
+                            '<div style="margin-bottom: 15px;">' +
+                                '<label style="display: block; font-weight: bold; margin-bottom: 5px;">CPF:</label>' +
+                                '<input type="text" id="clientCPF" value="' + (ticket.clientCPF || '') + '" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="updateClientData(\'' + ticket.id + '\', \'clientCPF\', this.value)">' +
+                            '</div>' +
+                            '<div style="margin-bottom: 15px;">' +
+                                '<label style="display: block; font-weight: bold; margin-bottom: 5px;">Responsável:</label>' +
+                                '<input type="text" id="responsibleAgent" value="' + (ticket.responsibleAgent || '') + '" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" onchange="updateClientData(\'' + ticket.id + '\', \'responsibleAgent\', this.value)">' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+            
+            document.body.appendChild(modal);
+            console.log('Modal completo criado e adicionado ao DOM');
+        }
+
+        // Função para fechar modal de ticket
+        function closeTicketModal() {
+            const modal = document.getElementById('ticketModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // Função para criar novo ticket
+        function createNewTicket() {
+            console.log('Criando novo ticket...');
+            
+            const newTicket = {
+                id: Date.now(),
+                title: 'Novo Ticket',
+                description: 'Descrição do novo ticket',
+                status: 'novo',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                clientName: '',
+                clientCPF: '',
+                responsibleAgent: '',
+                formId: null,
+                formData: {}
+            };
+            
+            const tempBox = {
+                id: 'temp',
+                name: 'Novo Ticket',
+                tickets: [newTicket]
+            };
+            
+            createTicketModal(newTicket, tempBox);
+        }
+
+        // Função para atualizar campos do ticket
+        function updateTicketField(ticketId, field, value) {
+            console.log('Atualizando campo do ticket:', field, '=', value);
+            
+            const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+            
+            for (const box of kanbanColumns) {
+                if (box.tickets) {
+                    const ticket = box.tickets.find(t => t.id === parseInt(ticketId));
+                    if (ticket) {
+                        ticket[field] = value;
+                        ticket.updatedAt = new Date().toISOString();
+                        
+                        localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Função para atualizar dados do cliente
+        function updateClientData(ticketId, field, value) {
+            console.log('Atualizando dados do cliente:', field, '=', value);
+            
+            const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+            
+            for (const box of kanbanColumns) {
+                if (box.tickets) {
+                    const ticket = box.tickets.find(t => t.id === parseInt(ticketId));
+                    if (ticket) {
+                        ticket[field] = value;
+                        ticket.updatedAt = new Date().toISOString();
+                        
+                        localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Função para alterar status do ticket
+        function changeTicketStatus(ticketId, newStatus) {
+            console.log('Alterando status do ticket:', ticketId, 'para:', newStatus);
+            
+            const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+            
+            for (const box of kanbanColumns) {
+                if (box.tickets) {
+                    const ticket = box.tickets.find(t => t.id === parseInt(ticketId));
+                    if (ticket) {
+                        ticket.status = newStatus;
+                        ticket.updatedAt = new Date().toISOString();
+                        
+                        // Mover ticket para caixa correta
+                        moveTicketToCorrectBox(ticket, kanbanColumns);
+                        
+                        localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
+                        
+                        closeTicketModal();
+                        loadBoxes();
+                        loadDashboardStats();
+                        
+                        alert(`Ticket atualizado para "${newStatus}"!`);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Função para mover ticket para caixa correta
+        function moveTicketToCorrectBox(ticket, kanbanColumns) {
+            // Remover ticket de todas as caixas
+            kanbanColumns.forEach(box => {
+                if (box.tickets) {
+                    box.tickets = box.tickets.filter(t => t.id !== ticket.id);
+                }
+            });
+            
+            // Adicionar ticket à caixa correta
+            const targetBox = kanbanColumns.find(box => box.id === ticket.status);
+            if (targetBox) {
+                if (!targetBox.tickets) {
+                    targetBox.tickets = [];
+                }
+                targetBox.tickets.push(ticket);
+            }
+        }
+
+        // Funções auxiliares
+        function openNewBoxModal() {
+            console.log('Abrindo modal de nova caixa...');
+            alert('Função de nova caixa ativada!');
+        }
+
+        function refreshTickets() {
+            console.log('Atualizando tickets...');
+            loadBoxes();
+            loadDashboardStats();
+            alert('Tickets atualizados!');
+        }
+
+        function searchTickets() {
+            console.log('Pesquisando tickets...');
+            alert('Função de pesquisa ativada!');
+        }
+
+        function openAIChatbot() {
+            console.log('Abrindo assistente IA...');
+            alert('Assistente IA ativado!');
+        }
+
+        // Função de teste simples
+        function testSimple() {
+            alert('Teste simples funcionando!');
+            console.log('Teste simples executado');
+        }
+
+        // Função para testar modal
+        function testModal() {
+            console.log('Testando modal...');
+            
+            // Verificar se há modal no DOM
+            const modal = document.getElementById('ticketModal');
+            if (modal) {
+                console.log('Modal encontrado no DOM:', modal);
+                console.log('Modal visível:', modal.style.display);
+                console.log('Modal z-index:', modal.style.zIndex);
+            } else {
+                console.log('Modal NÃO encontrado no DOM');
+            }
+            
+            // Verificar todos os elementos com ID ticketModal
+            const allModals = document.querySelectorAll('#ticketModal');
+            console.log('Total de modais encontrados:', allModals.length);
+            
+            // Verificar se document.body existe
+            console.log('document.body existe:', !!document.body);
+            console.log('document.body children:', document.body.children.length);
+        }
+
+        // Inicialização do sistema
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Sistema Velodesk inicializado!');
+            
+            // Teste de funções
+            console.log('Testando funções...');
+            console.log('fazerLogin:', typeof fazerLogin);
+            console.log('createNewTicket:', typeof createNewTicket);
+            console.log('openNewBoxModal:', typeof openNewBoxModal);
+            console.log('forceCreateKanbanBoxes:', typeof forceCreateKanbanBoxes);
+            console.log('refreshTickets:', typeof refreshTickets);
+            console.log('testSimple:', typeof testSimple);
+            
+            const isLoggedIn = localStorage.getItem('isLoggedIn');
+            if (isLoggedIn === 'true') {
+                const loginScreen = document.getElementById('loginScreen');
+                const mainApp = document.getElementById('mainApp');
+                
+                if (loginScreen) {
+                    loginScreen.style.display = 'none';
+                }
+                
+                if (mainApp) {
+                    mainApp.style.display = 'grid';
+                }
+                
+                loadBoxes();
+                loadDashboardStats();
+            }
+        });
+    </script>
+    
+</body>
+</html>
+
+
+
+

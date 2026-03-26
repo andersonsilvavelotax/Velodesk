@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velodesk - Sistema de Tickets</title>
+    <link rel="stylesheet" href="styles.css?v=3">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/compromise@14.10.0/builds/compromise.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-box">
+            <div class="logo">
+                <h1>Velodesk</h1>
+                <p>Sistema de Gerenciamento de Tickets</p>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="button" class="btn-primary" onclick="fazerLogin()">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo-header">
+                    <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Recolher/Expandir Menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1>Velodesk</h1>
+                </div>
+                <div class="header-actions">
+                    <div class="notification-bell" onclick="toggleNotificationPanel()">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificationBadge">0</span>
+                    </div>
+                    <div class="online-indicator">
+                        <i class="fas fa-circle"></i>
+                        <span>Online</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <nav class="sidebar" id="mainSidebar">
+            <ul class="nav-list">
+                <li class="nav-item active" data-page="dashboard" data-tooltip="Dashboard" onclick="navigateToPageMobile('dashboard')">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </li>
+                <li class="nav-item" data-page="tickets" data-tooltip="Tickets" onclick="navigateToPageMobile('tickets')">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>Tickets</span>
+                </li>
+                <li class="nav-item" data-page="chat" data-tooltip="Chat" onclick="navigateToPageMobile('chat')">
+                    <i class="fas fa-comments"></i>
+                    <span>Chat</span>
+                </li>
+                <li class="nav-item" data-page="reports" data-tooltip="Relatórios" onclick="navigateToPageMobile('reports')">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Relatórios</span>
+                </li>
+                <li class="nav-item" data-page="config" data-tooltip="Configurações" onclick="navigateToPageMobile('config')">
+                    <i class="fas fa-cog"></i>
+                    <span>Configurações</span>
+                </li>
+                <li class="nav-item" data-tooltip="Assistente IA" onclick="openAIChatbot()">
+                    <i class="fas fa-robot"></i>
+                    <span>Assistente IA</span>
+                </li>
+            </ul>
+            
+            <!-- Botão Meu Perfil -->
+            <div class="profile-section">
+                <button class="profile-btn" id="profileBtn" onclick="toggleProfileMenu()">
+                    <i class="fas fa-user"></i>
+                    <span>Meu Perfil</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="profile-menu" id="profileMenu">
+                    <a href="#" onclick="event.preventDefault(); editProfile();">
+                        <i class="fas fa-user-edit"></i>
+                        Editar Perfil
+                    </a>
+                    <a href="#" onclick="event.preventDefault(); changePassword();">
+                        <i class="fas fa-key"></i>
+                        Alterar Senha
+                    </a>
+                    <a href="#" onclick="event.preventDefault(); logout();">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Sair
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard -->
+            <div id="dashboard" class="page active">
+                <div class="page-header">
+                    <h2>Dashboard Executivo</h2>
+                    <div class="header-actions">
+                        <button class="btn-secondary" onclick="refreshDashboard()">
+                            <i class="fas fa-sync-alt"></i> Atualizar
+                        </button>
+                        <button class="btn-primary" onclick="exportDashboard()">
+                            <i class="fas fa-download"></i> Exportar
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="dashboard-container">
+                    <!-- KPIs Section -->
+                    <div class="kpi-section">
+                        <h3>Indicadores Principais</h3>
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-ticket-alt"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Tickets Resolvidos</h4>
+                                    <span class="kpi-value" id="resolvedTickets">0</span>
+                                    <span class="kpi-change positive">+12%</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Tempo Médio</h4>
+                                    <span class="kpi-value" id="avgResolutionTime">0h</span>
+                                    <span class="kpi-change negative">-8%</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-smile"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Satisfação</h4>
+                                    <span class="kpi-value" id="satisfactionScore">0%</span>
+                                    <span class="kpi-change positive">+5%</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Agentes Ativos</h4>
+                                    <span class="kpi-value" id="activeAgents">0</span>
+                                    <span class="kpi-change neutral">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Charts Section -->
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h4>Tickets por Status</h4>
+                            <canvas id="ticketsChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h4>Satisfação do Cliente</h4>
+                            <canvas id="satisfactionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tickets -->
+            <div id="tickets" class="page">
+                <!-- Barra de Abas de Tickets -->
+                <div class="ticket-tabs-bar" id="ticketTabsBar" style="display: none;">
+                    <!-- Abas serão adicionadas aqui dinamicamente -->
+                </div>
+                
+                <!-- Conteúdo das Abas de Tickets -->
+                <div class="ticket-tabs-content" style="display: none;">
+                    <!-- Conteúdo das abas será adicionado aqui dinamicamente -->
+                </div>
+                
+                <div class="tickets-layout" id="ticketsLayout">
+                    <!-- Lista de Caixas -->
+                    <div class="boxes-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <button id="addColumn" class="btn-primary" onclick="openNewBoxModal()">
+                                    <i class="fas fa-plus"></i> Nova Caixa
+                                </button>
+                                <button onclick="forceCreateKanbanBoxes()" class="btn-info">
+                                    <i class="fas fa-cubes"></i> Criar Caixas Padrão
+                                </button>
+                            </div>
+                        </div>
+                        <div class="boxes-list" id="boxesList">
+                            <!-- Caixas serão carregadas aqui -->
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de Tickets -->
+                    <div class="tickets-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <button id="createTicketBtn" class="btn-primary" onclick="createNewTicket()">
+                                    <i class="fas fa-plus"></i> Criar Ticket
+                                </button>
+                                <button id="refreshTicketsBtn" class="btn-secondary" onclick="refreshTickets()" title="Atualizar Tickets">
+                                    <i class="fas fa-sync-alt"></i> Atualizar
+                                </button>
+                            </div>
+                            <div class="ticket-filters">
+                                <select id="sortTickets">
+                                    <option value="date">Data</option>
+                                    <option value="name">Nome</option>
+                                    <option value="update">Última Atualização</option>
+                                    <option value="group">Grupo</option>
+                                </select>
+                                <div class="search-box">
+                                    <input type="text" id="searchTickets" placeholder="Buscar tickets...">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Filtro Avançado de Tickets -->
+                        <div class="ticket-filters-advanced" id="ticketFiltersAdvanced">
+                            <div class="filters-header" onclick="toggleFiltersPanel()">
+                                <h4><i class="fas fa-filter"></i> Filtros Avançados</h4>
+                                <button class="btn-toggle-filters" onclick="event.stopPropagation(); toggleFiltersPanel();">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                            <div class="filters-content" id="filtersContent" style="display: none;">
+                                <div class="filters-grid">
+                                    <!-- Número do Ticket -->
+                                    <div class="filter-group">
+                                        <label for="filterTicketNumber">
+                                            <i class="fas fa-hashtag"></i> Número do Ticket
+                                        </label>
+                                        <input type="text" id="filterTicketNumber" placeholder="Ex: 123456" oninput="applyTicketFilters()">
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="filter-group">
+                                        <label for="filterStatus">
+                                            <i class="fas fa-info-circle"></i> Status
+                                        </label>
+                                        <select id="filterStatus" onchange="applyTicketFilters()">
+                                            <option value="all">Todos os Status</option>
+                                            <option value="novos">Novos</option>
+                                            <option value="em-andamento">Em Andamento</option>
+                                            <option value="pendente">Pendente</option>
+                                            <option value="resolvido">Resolvido</option>
+                                            <option value="fechado">Fechado</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Responsável -->
+                                    <div class="filter-group">
+                                        <label for="filterResponsible">
+                                            <i class="fas fa-user"></i> Responsável
+                                        </label>
+                                        <input type="text" id="filterResponsible" placeholder="Nome do responsável" oninput="applyTicketFilters()">
+                                    </div>
+                                    
+                                    <!-- Grupo de Atendimento -->
+                                    <div class="filter-group">
+                                        <label for="filterGroup">
+                                            <i class="fas fa-users"></i> Grupo de Atendimento
+                                        </label>
+                                        <select id="filterGroup" onchange="applyTicketFilters()">
+                                            <option value="all">Todos os Grupos</option>
+                                            <option value="suporte">Suporte</option>
+                                            <option value="tecnico">Técnico</option>
+                                            <option value="comercial">Comercial</option>
+                                            <option value="financeiro">Financeiro</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Data de Abertura (De) -->
+                                    <div class="filter-group">
+                                        <label for="filterDateFrom">
+                                            <i class="fas fa-calendar-alt"></i> Data de Abertura (De)
+                                        </label>
+                                        <input type="date" id="filterDateFrom" onchange="applyTicketFilters()">
+                                    </div>
+                                    
+                                    <!-- Data de Abertura (Até) -->
+                                    <div class="filter-group">
+                                        <label for="filterDateTo">
+                                            <i class="fas fa-calendar-alt"></i> Data de Abertura (Até)
+                                        </label>
+                                        <input type="date" id="filterDateTo" onchange="applyTicketFilters()">
+                                    </div>
+                                    
+                                    <!-- Última Atualização (De) -->
+                                    <div class="filter-group">
+                                        <label for="filterUpdateFrom">
+                                            <i class="fas fa-clock"></i> Última Atualização (De)
+                                        </label>
+                                        <input type="date" id="filterUpdateFrom" onchange="applyTicketFilters()">
+                                    </div>
+                                    
+                                    <!-- Última Atualização (Até) -->
+                                    <div class="filter-group">
+                                        <label for="filterUpdateTo">
+                                            <i class="fas fa-clock"></i> Última Atualização (Até)
+                                        </label>
+                                        <input type="date" id="filterUpdateTo" onchange="applyTicketFilters()">
+                                    </div>
+                                </div>
+                                
+                                <!-- Botões de Ação -->
+                                <div class="filters-actions">
+                                    <button class="btn-secondary" onclick="clearTicketFilters()">
+                                        <i class="fas fa-times"></i> Limpar Filtros
+                                    </button>
+                                    <button class="btn-primary" onclick="applyTicketFilters()">
+                                        <i class="fas fa-search"></i> Aplicar Filtros
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tickets-list" id="ticketsList">
+                            <div class="no-selection">Selecione uma caixa para ver os tickets ou crie um novo ticket</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat -->
+            <div id="chat" class="page">
+                <div class="page-header">
+                    <h2><i class="fab fa-whatsapp"></i> WhatsApp</h2>
+                    <div class="chat-header-actions">
+                        <button class="btn-secondary" onclick="openWhatsAppSettings()">
+                            <i class="fas fa-cog"></i> Configurações
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Estado: WhatsApp não conectado -->
+                <div id="whatsappNotConnected" class="whatsapp-setup-container">
+                    <div class="whatsapp-setup-card">
+                        <div class="whatsapp-setup-icon">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <h3>Conecte seu WhatsApp</h3>
+                        <p>Para começar a usar o chat, você precisa vincular sua conta do WhatsApp Business</p>
+                        <button class="btn-primary btn-large" onclick="openWhatsAppSettings()">
+                            <i class="fas fa-link"></i> Vincular WhatsApp
+                        </button>
+                        <div class="whatsapp-setup-info">
+                            <h4>Como funciona:</h4>
+                            <ul>
+                                <li><i class="fas fa-check-circle"></i> Conecte usando WhatsApp Business API</li>
+                                <li><i class="fas fa-check-circle"></i> Ou use um número pessoal com QR Code</li>
+                                <li><i class="fas fa-check-circle"></i> Receba e responda mensagens aqui</li>
+                                <li><i class="fas fa-check-circle"></i> Gerencie todas as conversas em um só lugar</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Estado: WhatsApp conectado -->
+                <div id="whatsappConnected" class="chat-container" style="display: none;">
+                    <div class="chat-sidebar">
+                        <div class="chat-sidebar-header">
+                            <div class="whatsapp-status">
+                                <span class="status-indicator connected"></span>
+                                <span>Conectado</span>
+                            </div>
+                            <button class="btn-icon" onclick="refreshWhatsAppConversations()" title="Atualizar">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                        <div class="chat-search">
+                            <input type="text" id="chatSearchInput" placeholder="Buscar conversas...">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="chat-filters">
+                            <select id="filterConversationsByAgent" onchange="filterConversationsByAgent(this.value)" title="Filtrar por agente">
+                                <option value="all">Todos os Agentes</option>
+                            </select>
+                        </div>
+                        <div class="chat-conversations" id="chatConversations">
+                            <!-- Conversas serão carregadas aqui -->
+                        </div>
+                    </div>
+                    <div class="chat-main">
+                        <div class="chat-messages-header" id="chatMessagesHeader">
+                            <div class="selected-conversation-info">
+                                <div class="conversation-avatar">
+                                    <i class="fab fa-whatsapp"></i>
+                                </div>
+                                <div class="conversation-details">
+                                    <h4 id="conversationName">Selecione uma conversa</h4>
+                                    <span id="conversationStatus"></span>
+                                </div>
+                            </div>
+                            <div class="chat-actions">
+                                <button class="btn-icon" onclick="assignCurrentConversation()" title="Atribuir Conversa" id="assignConversationBtn" style="display: none;">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                                <button class="btn-icon" onclick="startNewWhatsAppConversation()" title="Nova Conversa">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <button class="btn-icon" onclick="createTicketFromWhatsApp()" title="Criar Ticket">
+                                    <i class="fas fa-ticket-alt"></i>
+                                </button>
+                                <button class="btn-icon" onclick="showConversationInfo()" title="Informações">
+                                    <i class="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="no-conversation">
+                                <i class="fab fa-whatsapp"></i>
+                                <h3>Selecione uma conversa</h3>
+                                <p>Escolha uma conversa para começar a conversar</p>
+                            </div>
+                        </div>
+                        <div class="chat-input">
+                            <button class="btn-icon" onclick="attachFile()" title="Anexar arquivo">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <input type="text" id="chatInput" placeholder="Selecione uma conversa para começar..." disabled onkeypress="handleChatKeyPress(event)">
+                            <button class="btn-icon" onclick="sendWhatsAppMessage()" title="Enviar">
+                                <i class="fab fa-whatsapp"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Modal de Configurações do WhatsApp -->
+                <div id="whatsAppSettingsModal" class="modal">
+                    <div class="modal-content modal-large">
+                        <div class="modal-header">
+                            <h3><i class="fab fa-whatsapp"></i> Configurações do WhatsApp</h3>
+                            <button class="close-btn" onclick="closeWhatsAppSettings()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="whatsapp-settings-tabs">
+                                <button class="settings-tab active" data-tab="connection" onclick="switchWhatsAppTab('connection')">
+                                    <i class="fas fa-link"></i> Conexão
+                                </button>
+                                <button class="settings-tab" data-tab="options" onclick="switchWhatsAppTab('options')">
+                                    <i class="fas fa-cog"></i> Opções
+                                </button>
+                                <button class="settings-tab" data-tab="automation" onclick="switchWhatsAppTab('automation')">
+                                    <i class="fas fa-robot"></i> Automação
+                                </button>
+                            </div>
+                            
+                            <!-- Tab: Conexão -->
+                            <div id="connectionTab" class="settings-tab-content active">
+                                <div class="whatsapp-connection-method">
+                                    <h4>Método de Conexão</h4>
+                                    <div class="connection-options">
+                                        <label class="connection-option">
+                                            <input type="radio" name="connectionMethod" value="api" checked>
+                                            <div class="option-card">
+                                                <i class="fas fa-code"></i>
+                                                <h5>WhatsApp Business API</h5>
+                                                <p>Integração oficial através da API do Facebook</p>
+                                            </div>
+                                        </label>
+                                        <label class="connection-option">
+                                            <input type="radio" name="connectionMethod" value="qr">
+                                            <div class="option-card">
+                                                <i class="fas fa-qrcode"></i>
+                                                <h5>QR Code (Web WhatsApp)</h5>
+                                                <p>Conecte usando QR Code como no WhatsApp Web</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- Configuração API -->
+                                <div id="apiConfig" class="connection-config">
+                                    <h4>Configurações da API</h4>
+                                    <div class="form-group">
+                                        <label for="whatsappApiToken">Token de Acesso</label>
+                                        <input type="text" id="whatsappApiToken" placeholder="Digite o token da API" class="form-input">
+                                        <small>Token obtido no Facebook Business Manager</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="whatsappApiUrl">URL da API</label>
+                                        <input type="text" id="whatsappApiUrl" placeholder="https://api.whatsapp.com" class="form-input">
+                                        <small>URL base da API do WhatsApp Business</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="whatsappPhoneNumber">Número do WhatsApp</label>
+                                        <input type="text" id="whatsappPhoneNumber" placeholder="5511999999999" class="form-input">
+                                        <small>Número no formato internacional (com código do país)</small>
+                                    </div>
+                                    <button class="btn-primary" onclick="testWhatsAppConnection()">
+                                        <i class="fas fa-plug"></i> Testar Conexão
+                                    </button>
+                                </div>
+                                
+                                <!-- Configuração QR Code -->
+                                <div id="qrConfig" class="connection-config" style="display: none;">
+                                    <h4>Conectar via QR Code</h4>
+                                    <div class="qr-code-container">
+                                        <div id="whatsappQRCode" class="qr-code-placeholder">
+                                            <i class="fas fa-qrcode"></i>
+                                            <p>QR Code aparecerá aqui</p>
+                                        </div>
+                                        <div class="qr-instructions">
+                                            <ol>
+                                                <li>Clique em "Gerar QR Code"</li>
+                                                <li>Abra o WhatsApp no seu celular</li>
+                                                <li>Vá em Configurações > Aparelhos conectados > Conectar um aparelho</li>
+                                                <li>Escaneie o QR Code que aparecerá acima</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                    <button class="btn-primary" onclick="openWhatsAppWebPopup()">
+                                        <i class="fas fa-external-link-alt"></i> Abrir WhatsApp Web
+                                    </button>
+                                    <button class="btn-info" onclick="checkWhatsAppConnection()" style="margin-top: 0.5rem;">
+                                        <i class="fas fa-sync-alt"></i> Verificar Conexão
+                                    </button>
+                                    <button class="btn-secondary" onclick="generateWhatsAppQR()" style="margin-top: 0.5rem;">
+                                        <i class="fas fa-qrcode"></i> Gerar QR Code Local
+                                    </button>
+                                </div>
+                                
+                                <div class="settings-actions">
+                                    <button class="btn-primary" onclick="saveWhatsAppConnection()">
+                                        <i class="fas fa-save"></i> Salvar Configurações
+                                    </button>
+                                    <button class="btn-secondary" onclick="disconnectWhatsApp()">
+                                        <i class="fas fa-unlink"></i> Desconectar
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab: Opções -->
+                            <div id="optionsTab" class="settings-tab-content">
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="autoReplyEnabled"> Respostas Automáticas
+                                    </label>
+                                    <small>Habilitar respostas automáticas para mensagens recebidas</small>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="autoReplyMessage">Mensagem de Resposta Automática</label>
+                                    <textarea id="autoReplyMessage" class="form-input" rows="4" placeholder="Digite a mensagem que será enviada automaticamente..."></textarea>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="saveConversations"> Salvar Histórico de Conversas
+                                    </label>
+                                    <small>Armazenar todas as conversas para consulta posterior</small>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="notificationsEnabled"> Notificações de Novas Mensagens
+                                    </label>
+                                    <small>Receber notificações quando novas mensagens chegarem</small>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="businessHours">Horário de Atendimento</label>
+                                    <div class="business-hours">
+                                        <select id="businessHoursStart" class="form-input">
+                                            <option value="08:00">08:00</option>
+                                            <option value="09:00">09:00</option>
+                                            <option value="10:00">10:00</option>
+                                        </select>
+                                        <span>até</span>
+                                        <select id="businessHoursEnd" class="form-input">
+                                            <option value="18:00">18:00</option>
+                                            <option value="19:00">19:00</option>
+                                            <option value="20:00">20:00</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <button class="btn-primary" onclick="saveWhatsAppOptions()">
+                                    <i class="fas fa-save"></i> Salvar Opções
+                                </button>
+                            </div>
+                            
+                            <!-- Tab: Automação -->
+                            <div id="automationTab" class="settings-tab-content">
+                                <h4>Respostas Automáticas</h4>
+                                <div class="automation-rules" id="automationRules">
+                                    <!-- Regras de automação serão adicionadas aqui -->
+                                </div>
+                                <button class="btn-secondary" onclick="addAutomationRule()">
+                                    <i class="fas fa-plus"></i> Adicionar Regra
+                                </button>
+                                
+                                <h4>Fluxos de Atendimento</h4>
+                                <div class="automation-flows" id="automationFlows">
+                                    <!-- Fluxos serão adicionados aqui -->
+                                </div>
+                                <button class="btn-secondary" onclick="addAutomationFlow()">
+                                    <i class="fas fa-plus"></i> Adicionar Fluxo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relatórios -->
+            <div id="reports" class="page">
+                <div class="page-header">
+                    <h2>Relatórios</h2>
+                </div>
+                
+                <!-- Tabs de Relatórios -->
+                <div class="reports-tabs">
+                    <button class="report-tab active" data-tab="import" onclick="switchReportTab('import')">
+                        <i class="fas fa-file-upload"></i> Importar Tickets
+                    </button>
+                    <button class="report-tab" data-tab="reading" onclick="switchReportTab('reading')">
+                        <i class="fas fa-book"></i> Leitura de Tickets
+                    </button>
+                    <button class="report-tab" data-tab="performance" onclick="switchReportTab('performance')">
+                        <i class="fas fa-chart-line"></i> Performance
+                    </button>
+                    <button class="report-tab" data-tab="agents" onclick="switchReportTab('agents')">
+                        <i class="fas fa-users"></i> Agentes
+                    </button>
+                    <button class="report-tab" data-tab="satisfaction" onclick="switchReportTab('satisfaction')">
+                        <i class="fas fa-smile"></i> Satisfação
+                    </button>
+                </div>
+                
+                <!-- Tab: Importar Tickets -->
+                <div id="importTab" class="report-tab-content active">
+                    <div class="import-section">
+                        <div class="import-header">
+                            <h3><i class="fas fa-file-excel"></i> Importar Planilha de Tickets</h3>
+                            <p>Faça upload de uma planilha Excel (.xlsx) ou CSV (.csv) com os dados dos tickets</p>
+                        </div>
+                        
+                        <div class="upload-area" id="uploadArea">
+                            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display: none;" onchange="handleFileUpload(event)">
+                            <div class="upload-placeholder" onclick="document.getElementById('fileInput').click()">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <h4>Clique aqui ou arraste o arquivo</h4>
+                                <p>Formatos aceitos: .xlsx, .xls, .csv</p>
+                                <p class="upload-hint">O arquivo deve conter as colunas: Número do ticket, Assunto, Status, Prioridade, Data de entrada, Data da resolução, Responsável, Avaliação</p>
+                            </div>
+                        </div>
+                        
+                        <div class="import-status" id="importStatus" style="display: none;">
+                            <div class="status-message" id="statusMessage"></div>
+                            <div class="status-stats" id="statusStats"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Leitura de Tickets -->
+                <div id="readingTab" class="report-tab-content">
+                    <div class="reading-section">
+                        <div class="reading-header">
+                            <h3><i class="fas fa-book"></i> Leitura de Tickets</h3>
+                            <div class="reading-actions">
+                                <button class="btn-info" onclick="toggleCharts()" id="toggleChartsBtn">
+                                    <i class="fas fa-chart-bar"></i> <span id="chartsToggleText">Mostrar Gráficos</span>
+                                </button>
+                                <button class="btn-secondary" onclick="clearImportedTickets()">
+                                    <i class="fas fa-trash"></i> Limpar Dados
+                                </button>
+                                <button class="btn-primary" onclick="exportTicketsReport()">
+                                    <i class="fas fa-download"></i> Exportar Relatório
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="reading-filters">
+                            <div class="filter-group">
+                                <label for="filterReadingStatus">
+                                    <i class="fas fa-filter"></i> Status
+                                </label>
+                                <select id="filterReadingStatus" onchange="filterReadingTickets()">
+                                    <option value="all">Todos</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="filterReadingPriority">
+                                    <i class="fas fa-filter"></i> Prioridade
+                                </label>
+                                <select id="filterReadingPriority" onchange="filterReadingTickets()">
+                                    <option value="all">Todas</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="filterReadingResponsible">
+                                    <i class="fas fa-filter"></i> Responsável
+                                </label>
+                                <select id="filterReadingResponsible" onchange="filterReadingTickets()">
+                                    <option value="all">Todos</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="searchReadingTickets">
+                                    <i class="fas fa-search"></i> Buscar
+                                </label>
+                                <input type="text" id="searchReadingTickets" placeholder="Buscar por número ou assunto..." oninput="filterReadingTickets()">
+                            </div>
+                        </div>
+                        
+                        <div class="reading-stats" id="readingStats"></div>
+                        
+                        <!-- Gráficos -->
+                        <div class="reading-charts" id="readingCharts" style="display: none;">
+                            <div class="charts-grid">
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-pie"></i> Tickets por Status</h4>
+                                    <canvas id="statusChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-bar"></i> Tickets por Prioridade</h4>
+                                    <canvas id="priorityChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-line"></i> Tickets ao Longo do Tempo</h4>
+                                    <canvas id="timeChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-star"></i> Distribuição de Avaliações</h4>
+                                    <p style="font-size: 0.85rem; color: #6c757d; margin-bottom: 10px;">Categorias: Bom, Bom com comentário, Ruim, Ruim com comentário</p>
+                                    <canvas id="ratingChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="tickets-table-container">
+                            <table class="tickets-table" id="ticketsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Número</th>
+                                        <th>Assunto</th>
+                                        <th>Status</th>
+                                        <th>Prioridade</th>
+                                        <th>Data de Entrada</th>
+                                        <th>Data de Resolução</th>
+                                        <th>Responsável</th>
+                                        <th>Avaliação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ticketsTableBody">
+                                    <tr>
+                                        <td colspan="8" class="no-data">
+                                            <i class="fas fa-info-circle"></i>
+                                            Nenhum ticket importado. Faça upload de uma planilha na aba "Importar Tickets".
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Performance -->
+                <div id="performanceTab" class="report-tab-content">
+                    <div class="reports-container">
+                        <div class="reading-stats" id="performanceStats"></div>
+                        <div class="reading-charts">
+                            <div class="charts-grid">
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-clock"></i> Tempo Médio de Resolução</h4>
+                                    <canvas id="avgResolutionTimeChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-line"></i> Tickets Resolvidos por Período</h4>
+                                    <canvas id="ticketsResolvedChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-tachometer-alt"></i> Taxa de Resolução (SLA)</h4>
+                                    <canvas id="slaChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-bar"></i> Distribuição de Tempo de Resolução</h4>
+                                    <canvas id="resolutionTimeDistributionChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Agentes -->
+                <div id="agentsTab" class="report-tab-content">
+                    <div class="reports-container">
+                        <div class="reading-stats" id="agentsStats"></div>
+                        <div class="reading-charts">
+                            <div class="charts-grid">
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-bar"></i> Tickets por Agente</h4>
+                                    <canvas id="ticketsByAgentChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-clock"></i> Tempo Médio por Agente</h4>
+                                    <canvas id="avgTimeByAgentChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-percentage"></i> Taxa de Resolução por Agente</h4>
+                                    <canvas id="resolutionRateByAgentChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-trophy"></i> Ranking de Desempenho</h4>
+                                    <canvas id="agentPerformanceRankingChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tab: Satisfação -->
+                <div id="satisfactionTab" class="report-tab-content">
+                    <div class="reports-container">
+                        <div class="reading-stats" id="satisfactionStats"></div>
+                        <div class="reading-charts">
+                            <div class="charts-grid">
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-pie"></i> Distribuição de Satisfação</h4>
+                                    <p style="font-size: 0.77rem; color: #6c757d; margin-bottom: 10px;">Categorias: Bom, Bom com comentário, Ruim, Ruim com comentário</p>
+                                    <canvas id="satisfactionDistributionChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-chart-line"></i> Tendência de Satisfação</h4>
+                                    <canvas id="satisfactionTrendChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-users"></i> Satisfação por Agente</h4>
+                                    <canvas id="satisfactionByAgentChart"></canvas>
+                                </div>
+                                <div class="chart-card">
+                                    <h4><i class="fas fa-star"></i> Comparativo de Satisfação</h4>
+                                    <canvas id="satisfactionComparisonChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configurações -->
+            <div id="config" class="page">
+                <div class="page-header">
+                    <h2>Configurações</h2>
+                </div>
+                <div class="config-layout">
+                    <div class="config-sidebar">
+                        <ul class="config-menu">
+                            <li class="config-menu-item active" data-config-tab="users">
+                                <i class="fas fa-users"></i>
+                                <span>Usuários</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="forms">
+                                <i class="fas fa-wpforms"></i>
+                                <span>Formulários</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="workflows">
+                                <i class="fas fa-project-diagram"></i>
+                                <span>Workflows</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="backup">
+                                <i class="fas fa-database"></i>
+                                <span>Backup/Restore</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="audit">
+                                <i class="fas fa-clipboard-list"></i>
+                                <span>Auditoria</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="api">
+                                <i class="fas fa-code"></i>
+                                <span>API Externa</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="automation">
+                                <i class="fas fa-cogs"></i>
+                                <span>Automações</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="fields">
+                                <i class="fas fa-list"></i>
+                                <span>Campos</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="email">
+                                <i class="fas fa-envelope"></i>
+                                <span>E-mail</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="config-content">
+                        <!-- Aba Usuários -->
+                        <div id="usersTab" class="config-tab-content active">
+                            <div class="config-section">
+                                <h4>Gerenciamento de Usuários</h4>
+                                <div class="users-list" id="usersList">
+                                    <!-- Usuários serão listados aqui -->
+                                </div>
+                                <button id="addUser" class="btn-primary">
+                                    <i class="fas fa-plus"></i> Novo Usuário
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba Formulários -->
+                        <div id="formsTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>Formulários Personalizados</h4>
+                                <div class="forms-stats">
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-wpforms"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="totalForms">0</h3>
+                                            <p>Total de Formulários</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-list"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="totalFields">0</h3>
+                                            <p>Total de Campos</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-tree"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="totalTrees">0</h3>
+                                            <p>Campos de Árvore</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="forms-actions">
+                                    <button id="addForm" class="btn-primary" onclick="openFormModal()">
+                                        <i class="fas fa-plus"></i> Novo Formulário
+                                    </button>
+                                </div>
+                                
+                                <div class="forms-list" id="formsList">
+                                    <!-- Formulários serão listados aqui -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba Workflows -->
+                        <div id="workflowsTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>Automação e Workflows</h4>
+                                <div class="workflows-stats">
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-project-diagram"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="totalWorkflows">0</h3>
+                                            <p>Total de Workflows</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-play"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="activeWorkflows">0</h3>
+                                            <p>Workflows Ativos</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-chart-line"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="workflowExecutions">0</h3>
+                                            <p>Execuções Hoje</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="workflows-actions">
+                                    <button class="btn-primary" onclick="createNewWorkflow()">
+                                        <i class="fas fa-plus"></i> Novo Workflow
+                                    </button>
+                                    <button class="btn-secondary" onclick="loadWorkflows()">
+                                        <i class="fas fa-sync-alt"></i> Atualizar
+                                    </button>
+                                </div>
+                                
+                                <div class="workflows-list" id="workflowsList">
+                                    <!-- Workflows serão listados aqui -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba Backup/Restore -->
+                        <div id="backupTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>Backup e Restore</h4>
+                                <div class="backup-stats">
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-database"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="totalBackups">0</h3>
+                                            <p>Total de Backups</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-calendar"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="lastBackup">Nunca</h3>
+                                            <p>Último Backup</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-hdd"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="backupSize">0 MB</h3>
+                                            <p>Tamanho Total</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="backup-actions">
+                                    <button class="btn-primary" onclick="createFullBackup()">
+                                        <i class="fas fa-download"></i> Backup Completo
+                                    </button>
+                                    <button class="btn-secondary" onclick="createIncrementalBackup()">
+                                        <i class="fas fa-plus"></i> Backup Incremental
+                                    </button>
+                                    <button class="btn-warning" onclick="configureScheduledBackup()">
+                                        <i class="fas fa-clock"></i> Backup Agendado
+                                    </button>
+                                </div>
+
+                                <div class="backup-history" id="backupHistory">
+                                    <!-- Histórico de backups será listado aqui -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba Auditoria -->
+                        <div id="auditTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>Auditoria e Logs</h4>
+                                <div class="audit-filters">
+                                    <div class="filter-group">
+                                        <label>Data Inicial:</label>
+                                        <input type="date" id="auditDateFrom">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label>Data Final:</label>
+                                        <input type="date" id="auditDateTo">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label>Usuário:</label>
+                                        <input type="text" id="auditUser" placeholder="Nome do usuário">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label>Ação:</label>
+                                        <select id="auditAction">
+                                            <option value="">Todas as ações</option>
+                                            <option value="login">Login</option>
+                                            <option value="create">Criar</option>
+                                            <option value="update">Atualizar</option>
+                                            <option value="delete">Excluir</option>
+                                            <option value="export">Exportar</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn-primary" onclick="filterAuditLogs()">
+                                        <i class="fas fa-search"></i> Filtrar
+                                    </button>
+                                </div>
+                                
+                                <div class="audit-actions">
+                                    <button class="btn-secondary" onclick="exportAuditLogs()">
+                                        <i class="fas fa-download"></i> Exportar Logs
+                                    </button>
+                                    <button class="btn-warning" onclick="clearOldLogs()">
+                                        <i class="fas fa-trash"></i> Limpar Logs Antigos
+                                    </button>
+                                </div>
+                                
+                                <div class="audit-table" id="auditTable">
+                                    <!-- Tabela de auditoria será exibida aqui -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aba API Externa -->
+                        <div id="apiTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>API Externa</h4>
+                                <div class="api-stats">
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-key"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="totalApiKeys">0</h3>
+                                            <p>Chaves de API</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-link"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="totalEndpoints">0</h3>
+                                            <p>Endpoints</p>
+                                        </div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-icon">
+                                            <i class="fas fa-chart-bar"></i>
+                                        </div>
+                                        <div class="stat-info">
+                                            <h3 id="apiRequests">0</h3>
+                                            <p>Requisições Hoje</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="api-actions">
+                                    <button class="btn-primary" onclick="generateApiKey()">
+                                        <i class="fas fa-plus"></i> Nova Chave API
+                                    </button>
+                                    <button class="btn-secondary" onclick="loadApiKeys()">
+                                        <i class="fas fa-sync-alt"></i> Atualizar
+                                    </button>
+                                    <button class="btn-info" onclick="openApiDocumentation()">
+                                        <i class="fas fa-book"></i> Documentação
+                                    </button>
+                                </div>
+                        
+                                <div class="api-keys-section">
+                                    <h5>Chaves de API</h5>
+                                    <div class="api-keys-list" id="apiKeysList">
+                                        <!-- Lista de chaves de API será exibida aqui -->
+                                    </div>
+                                </div>
+
+                                <div class="api-endpoints-section">
+                                    <h5>Endpoints Disponíveis</h5>
+                                    <div class="api-endpoints-list" id="apiEndpointsList">
+                                        <!-- Lista de endpoints será exibida aqui -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aba Automações -->
+                        <div id="automationTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>Regras de Automação</h4>
+                                <div class="automation-rules" id="automationRules">
+                                    <!-- Regras de automação serão listadas aqui -->
+                                </div>
+                                <button id="addAutomation" class="btn-primary">
+                                    <i class="fas fa-plus"></i> Nova Automação
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba Campos -->
+                        <div id="fieldsTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>Campos Personalizados</h4>
+                                <div class="custom-fields" id="customFields">
+                                    <!-- Campos personalizados serão listados aqui -->
+                                </div>
+                                <button id="addField" class="btn-primary">
+                                    <i class="fas fa-plus"></i> Novo Campo
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba E-mail -->
+                        <div id="emailTab" class="config-tab-content">
+                            <div class="config-section">
+                                <h4>Configurações de E-mail</h4>
+                                <div class="email-settings-form">
+                                    <div class="form-group">
+                                        <label for="emailSupport">E-mail para Receber Chamados:</label>
+                                        <input type="email" id="emailSupport" placeholder="suporte@empresa.com">
+                                        <small>E-mail que receberá notificações de novos chamados</small>
+                                    </div>
+                                    
+                                    <h5 style="margin-top: 2rem; margin-bottom: 1rem; color: var(--primary-blue);">Configurações SMTP (Envio de E-mails)</h5>
+                                    
+                                    <div class="form-group">
+                                        <label for="smtpHost">Servidor SMTP:</label>
+                                        <input type="text" id="smtpHost" placeholder="smtp.gmail.com">
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="smtpPort">Porta:</label>
+                                        <input type="number" id="smtpPort" placeholder="587" value="587">
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="smtpSecure">Segurança:</label>
+                                        <select id="smtpSecure">
+                                            <option value="false">Nenhuma</option>
+                                            <option value="true" selected>TLS/SSL</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="smtpUser">Usuário/E-mail:</label>
+                                        <input type="email" id="smtpUser" placeholder="seu-email@gmail.com">
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="smtpPassword">Senha:</label>
+                                        <input type="password" id="smtpPassword" placeholder="Senha do e-mail ou senha de app">
+                                        <small>Para Gmail, use uma senha de aplicativo</small>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label for="smtpFromName">Nome do Remetente:</label>
+                                        <input type="text" id="smtpFromName" placeholder="Velodesk Suporte" value="Velodesk Suporte">
+                                    </div>
+                                    
+                                    <button class="btn-primary" onclick="saveEmailSettings()">
+                                        <i class="fas fa-save"></i> Salvar Configurações
+                                    </button>
+                                    
+                                    <button class="btn-secondary" onclick="testEmailSettings()" style="margin-left: 10px;">
+                                        <i class="fas fa-paper-plane"></i> Testar Envio
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Panel -->
+    <div class="notification-panel" id="notificationPanel">
+        <div class="notification-header">
+            <h3>Notificações</h3>
+            <button onclick="markAllAsRead()">
+                <i class="fas fa-check-double"></i>
+                Marcar todas como lidas
+            </button>
+        </div>
+        <div class="notification-list" id="notificationList">
+            <!-- Notificações serão carregadas aqui -->
+        </div>
+    </div>
+
+    <!-- Modal Novo Ticket -->
+    <div id="ticketModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Novo Ticket</h3>
+                <button class="close-btn" onclick="closeTicketModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="ticketForm">
+                    <div class="form-group">
+                        <label for="ticketTitle">Título:</label>
+                        <input type="text" id="ticketTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketDescription">Descrição:</label>
+                        <textarea id="ticketDescription" rows="4" required></textarea>
+                    </div>
+                    
+                    <!-- Seleção de Formulário -->
+                    <div class="form-group">
+                        <label for="ticketFormSelect">Formulário Personalizado:</label>
+                        <select id="ticketFormSelect" onchange="loadFormFields()">
+                            <option value="">Selecione um formulário (opcional)</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Campos do Formulário Selecionado -->
+                    <div id="formFieldsContainer" class="form-fields-container" style="display: none;">
+                        <h4>Campos do Formulário</h4>
+                        <div id="dynamicFormFields">
+                            <!-- Campos serão renderizados aqui dinamicamente -->
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeTicketModal()">Cancelar</button>
+                <button class="btn-primary" onclick="saveTicket()">Salvar Ticket</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Novo Formulário - Removido, será criado dinamicamente pelo JavaScript -->
+
+    <!-- Modal Configuração de Campo - Removido completamente, não deve aparecer na aba de tickets -->
+
+    <!-- Discador Flutuante 55pbx -->
+    <div id="floatingDialer" class="floating-dialer">
+        <div class="dialer-toggle" id="dialerToggle" title="Arraste para mover ou clique para abrir">
+            <i class="fas fa-phone"></i>
+            <i class="fas fa-grip-vertical dialer-drag-handle" title="Arraste para mover"></i>
+        </div>
+        <div class="dialer-container" id="dialerContainer" style="display: none;">
+            <div class="dialer-header">
+                <h3>Discador</h3>
+                <div class="dialer-header-actions">
+                    <button class="dialer-header-btn" onclick="openDialerHistory()" title="Histórico">
+                        <i class="fas fa-history"></i>
+                    </button>
+                    <button class="dialer-header-btn" onclick="openDialerPauses()" title="Pausas">
+                        <i class="fas fa-pause-circle"></i>
+                    </button>
+                    <button class="dialer-header-btn" onclick="openPbxConfig()" title="Configurações">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="dialer-close" onclick="toggleDialer()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="dialer-body">
+                <div class="dialer-display">
+                    <input type="text" id="dialerNumber" class="dialer-number-input" placeholder="Digite o número" readonly>
+                </div>
+                <div class="dialer-keypad">
+                    <button class="dialer-key" onclick="dialerInput('1')">1</button>
+                    <button class="dialer-key" onclick="dialerInput('2')">2 <span class="dialer-letters">ABC</span></button>
+                    <button class="dialer-key" onclick="dialerInput('3')">3 <span class="dialer-letters">DEF</span></button>
+                    <button class="dialer-key" onclick="dialerInput('4')">4 <span class="dialer-letters">GHI</span></button>
+                    <button class="dialer-key" onclick="dialerInput('5')">5 <span class="dialer-letters">JKL</span></button>
+                    <button class="dialer-key" onclick="dialerInput('6')">6 <span class="dialer-letters">MNO</span></button>
+                    <button class="dialer-key" onclick="dialerInput('7')">7 <span class="dialer-letters">PQRS</span></button>
+                    <button class="dialer-key" onclick="dialerInput('8')">8 <span class="dialer-letters">TUV</span></button>
+                    <button class="dialer-key" onclick="dialerInput('9')">9 <span class="dialer-letters">WXYZ</span></button>
+                    <button class="dialer-key" onclick="dialerInput('*')">*</button>
+                    <button class="dialer-key" onclick="dialerInput('0')">0 <span class="dialer-letters">+</span></button>
+                    <button class="dialer-key" onclick="dialerInput('#')">#</button>
+                </div>
+                <div class="dialer-actions">
+                    <button class="dialer-action-btn dialer-call" onclick="makeCall()" id="dialerCallBtn">
+                        <i class="fas fa-phone"></i> Ligar
+                    </button>
+                    <button class="dialer-action-btn dialer-backspace" onclick="dialerBackspace()">
+                        <i class="fas fa-backspace"></i>
+                    </button>
+                    <button class="dialer-action-btn dialer-clear" onclick="dialerClear()">
+                        <i class="fas fa-times"></i> Limpar
+                    </button>
+                </div>
+                <div class="dialer-status" id="dialerStatus">
+                    <span class="status-text">Pronto para discar</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Assistente IA -->
+    <div id="aiChatbotModal" class="modal">
+        <div class="modal-content ai-chatbot-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-robot"></i> Assistente IA</h3>
+                <button class="close-btn" onclick="closeAIChatbot()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="ai-chat-container">
+                    <div class="ai-chat-messages" id="aiChatMessages">
+                        <div class="ai-message ai-assistant">
+                            <div class="ai-avatar">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="ai-content">
+                                <p>Olá! Sou seu assistente IA. Como posso ajudá-lo hoje?</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ai-chat-input">
+                        <input type="text" id="aiChatInput" placeholder="Digite sua pergunta..." onkeypress="handleAIChatKeyPress(event)">
+                        <button class="btn-primary" onclick="sendAIMessage()">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="login-simple-fixed.js"></script>
+    
+</body>
+</html>

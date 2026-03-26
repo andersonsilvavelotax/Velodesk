@@ -1,0 +1,83 @@
+{
+  "webhook_configuration": {
+    "description": "Configuração de webhook para integração com Velodesk",
+    "webhook_url": "https://seudominio.com/webhook-receiver.php",
+    "events": [
+      {
+        "event": "call.incoming",
+        "description": "Chamada entrante",
+        "payload": {
+          "event": "call.incoming",
+          "call_id": "{{call_id}}",
+          "from": "{{caller_number}}",
+          "to": "{{called_number}}",
+          "direction": "incoming",
+          "status": "ringing",
+          "timestamp": "{{timestamp}}",
+          "customer_name": "{{customer_name}}"
+        }
+      },
+      {
+        "event": "call.answered",
+        "description": "Chamada atendida",
+        "payload": {
+          "event": "call.answered",
+          "call_id": "{{call_id}}",
+          "from": "{{caller_number}}",
+          "to": "{{called_number}}",
+          "direction": "incoming",
+          "status": "answered",
+          "duration": "{{call_duration}}",
+          "timestamp": "{{timestamp}}",
+          "agent": "{{agent_name}}",
+          "customer_name": "{{customer_name}}"
+        }
+      },
+      {
+        "event": "call.missed",
+        "description": "Chamada perdida",
+        "payload": {
+          "event": "call.missed",
+          "call_id": "{{call_id}}",
+          "from": "{{caller_number}}",
+          "to": "{{called_number}}",
+          "direction": "incoming",
+          "status": "missed",
+          "duration": 0,
+          "timestamp": "{{timestamp}}",
+          "customer_name": "{{customer_name}}"
+        }
+      },
+      {
+        "event": "call.ended",
+        "description": "Chamada finalizada",
+        "payload": {
+          "event": "call.ended",
+          "call_id": "{{call_id}}",
+          "from": "{{caller_number}}",
+          "to": "{{called_number}}",
+          "direction": "incoming",
+          "status": "ended",
+          "duration": "{{call_duration}}",
+          "timestamp": "{{timestamp}}",
+          "agent": "{{agent_name}}",
+          "customer_name": "{{customer_name}}"
+        }
+      }
+    ],
+    "settings": {
+      "auto_create_tickets": true,
+      "default_category": "suporte",
+      "timeout": 30,
+      "retry_attempts": 3
+    }
+  },
+  "55pbx_setup_instructions": {
+    "step_1": "Acesse o painel administrativo da 55PBX",
+    "step_2": "Vá em Configurações > Webhooks ou Integrações",
+    "step_3": "Adicione uma nova URL de webhook",
+    "step_4": "Configure os eventos que deseja enviar",
+    "step_5": "Teste a integração com uma chamada de teste"
+  }
+}
+

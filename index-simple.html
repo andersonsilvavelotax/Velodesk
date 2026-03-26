@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velodesk - Teste</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Tela de Login -->
+    <div id="loginScreen" class="login-screen">
+        <div class="login-container">
+            <h1>Velodesk</h1>
+            <form onsubmit="fazerLogin(); return false;">
+                <input type="email" id="email" placeholder="Email" required>
+                <input type="password" id="password" placeholder="Senha" required>
+                <button type="submit">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Aplicação Principal -->
+    <div id="mainApp" class="main-app" style="display: none;">
+        <header class="header">
+            <h1>Velodesk</h1>
+        </header>
+
+        <nav class="sidebar">
+            <ul class="nav-menu">
+                <li class="nav-item active" onclick="navigateToPage('dashboard')">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </li>
+                <li class="nav-item" onclick="navigateToPage('tickets')">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>Tickets</span>
+                </li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <div id="dashboard" class="page active">
+                <h2>Dashboard</h2>
+                <p>Página do Dashboard</p>
+            </div>
+            
+            <div id="tickets" class="page">
+                <h2>Tickets</h2>
+                <p>Página de Tickets</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function fazerLogin() {
+            const loginScreen = document.getElementById('loginScreen');
+            const mainApp = document.getElementById('mainApp');
+            
+            if (loginScreen) {
+                loginScreen.style.display = 'none';
+            }
+            if (mainApp) {
+                mainApp.style.display = 'block';
+            }
+        }
+        
+        function navigateToPage(page) {
+            console.log('Navegando para:', page);
+            
+            // Ocultar todas as páginas
+            document.querySelectorAll('.page').forEach(p => {
+                p.style.display = 'none';
+                p.classList.remove('active');
+            });
+            
+            // Mostrar página correspondente
+            const targetPage = document.getElementById(page);
+            if (targetPage) {
+                targetPage.style.display = 'block';
+                targetPage.classList.add('active');
+                console.log('Página exibida:', page);
+            }
+        }
+    </script>
+</body>
+</html>
+

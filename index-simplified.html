@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velodesk - Sistema de Tickets</title>
+    <link rel="stylesheet" href="styles.css?v=3">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/compromise@14.10.0/builds/compromise.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-box">
+            <div class="logo">
+                <h1>Velodesk</h1>
+                <p>Sistema de Gerenciamento de Tickets</p>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="button" class="btn-primary" onclick="fazerLogin()">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="mainApp" class="main-app" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="logo-header">
+                    <h1>Velodesk</h1>
+                </div>
+                <div class="header-actions">
+                    <div class="notification-bell" onclick="toggleNotificationPanel()">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificationBadge">0</span>
+                    </div>
+                    <div class="online-indicator">
+                        <i class="fas fa-circle"></i>
+                        <span>Online</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <ul class="nav-list">
+                <li class="nav-item active" data-page="dashboard" onclick="navigateToPageMobile('dashboard')">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </li>
+                <li class="nav-item" data-page="tickets" onclick="navigateToPageMobile('tickets')">
+                    <i class="fas fa-ticket-alt"></i>
+                    <span>Tickets</span>
+                </li>
+                <li class="nav-item" data-page="chat" onclick="navigateToPageMobile('chat')">
+                    <i class="fas fa-comments"></i>
+                    <span>Chat</span>
+                </li>
+                <li class="nav-item" data-page="reports" onclick="navigateToPageMobile('reports')">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Relatórios</span>
+                </li>
+                <li class="nav-item" data-page="config" onclick="navigateToPageMobile('config')">
+                    <i class="fas fa-cog"></i>
+                    <span>Configurações</span>
+                </li>
+                <li class="nav-item" onclick="openAIChatbot()">
+                    <i class="fas fa-robot"></i>
+                    <span>Assistente IA</span>
+                </li>
+                <li class="nav-item" data-page="crm" onclick="navigateToPageMobile('crm')">
+                    <i class="fas fa-handshake"></i>
+                    <span>CRM</span>
+                </li>
+            </ul>
+            
+            <!-- Botão Meu Perfil -->
+            <div class="profile-section">
+                <button class="profile-btn" id="profileBtn" onclick="toggleProfileMenu()">
+                    <i class="fas fa-user"></i>
+                    <span>Meu Perfil</span>
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="profile-menu" id="profileMenu">
+                    <a href="#" onclick="editProfile()">
+                        <i class="fas fa-user-edit"></i>
+                        Editar Perfil
+                    </a>
+                    <a href="#" onclick="changePassword()">
+                        <i class="fas fa-key"></i>
+                        Alterar Senha
+                    </a>
+                    <a href="#" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Sair
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard -->
+            <div id="dashboard" class="page active">
+                <div class="page-header">
+                    <h2>Dashboard Executivo</h2>
+                    <div class="header-actions">
+                        <button class="btn-secondary" onclick="refreshDashboard()">
+                            <i class="fas fa-sync-alt"></i> Atualizar
+                        </button>
+                        <button class="btn-primary" onclick="exportDashboard()">
+                            <i class="fas fa-download"></i> Exportar
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="dashboard-container">
+                    <!-- KPIs Section -->
+                    <div class="kpi-section">
+                        <h3>Indicadores Principais</h3>
+                        <div class="kpi-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-ticket-alt"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Tickets Resolvidos</h4>
+                                    <span class="kpi-value" id="resolvedTickets">0</span>
+                                    <span class="kpi-change positive">+12%</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Tempo Médio</h4>
+                                    <span class="kpi-value" id="avgResolutionTime">0h</span>
+                                    <span class="kpi-change negative">-8%</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-smile"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Satisfação</h4>
+                                    <span class="kpi-value" id="satisfactionScore">0%</span>
+                                    <span class="kpi-change positive">+5%</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="kpi-info">
+                                    <h4>Agentes Ativos</h4>
+                                    <span class="kpi-value" id="activeAgents">0</span>
+                                    <span class="kpi-change neutral">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Charts Section -->
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h4>Tickets por Status</h4>
+                            <canvas id="ticketsChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h4>Satisfação do Cliente</h4>
+                            <canvas id="satisfactionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tickets -->
+            <div id="tickets" class="page">
+                <div class="tickets-layout">
+                    <!-- Lista de Caixas -->
+                    <div class="boxes-panel">
+                        <div class="panel-header">
+                            <button id="addColumn" class="btn-primary" onclick="openNewBoxModal()">
+                                <i class="fas fa-plus"></i> Nova Caixa
+                            </button>
+                        </div>
+                        <div class="boxes-list" id="boxesList">
+                            <!-- Caixas serão carregadas aqui -->
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de Tickets da Caixa Selecionada -->
+                    <div class="tickets-panel">
+                        <div class="panel-header">
+                            <div class="header-left">
+                                <button id="createTicketBtn" class="btn-primary" onclick="createNewTicket()">
+                                    <i class="fas fa-plus"></i> Criar Ticket
+                                </button>
+                                <button id="refreshTicketsBtn" class="btn-secondary" onclick="refreshTickets()" title="Atualizar Tickets">
+                                    <i class="fas fa-sync-alt"></i> Atualizar
+                                </button>
+                            </div>
+                            <div class="ticket-filters">
+                                <select id="sortTickets">
+                                    <option value="date">Data</option>
+                                    <option value="name">Nome</option>
+                                    <option value="update">Última Atualização</option>
+                                    <option value="group">Grupo</option>
+                                </select>
+                                <div class="search-box">
+                                    <input type="text" id="searchTickets" placeholder="Buscar tickets...">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tickets-list" id="ticketsList">
+                            <div class="no-selection">Selecione uma caixa para ver os tickets ou crie um novo ticket</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat -->
+            <div id="chat" class="page">
+                <div class="page-header">
+                    <h2>Chat Unificado</h2>
+                    <div class="chat-channels">
+                        <button class="channel-btn active" data-channel="whatsapp" onclick="switchChannel('whatsapp')">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>WhatsApp</span>
+                        </button>
+                        <button class="channel-btn" data-channel="internal" onclick="switchChannel('internal')">
+                            <i class="fas fa-comments"></i>
+                            <span>Interno</span>
+                        </button>
+                        <button class="channel-btn" data-channel="email" onclick="switchChannel('email')">
+                            <i class="fas fa-envelope"></i>
+                            <span>Email</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="chat-container">
+                    <div class="chat-sidebar">
+                        <div class="chat-conversations" id="chatConversations">
+                            <!-- Conversas serão carregadas aqui -->
+                        </div>
+                    </div>
+                    <div class="chat-main">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="no-conversation">
+                                <i class="fas fa-comments"></i>
+                                <h3>Selecione uma conversa</h3>
+                                <p>Escolha uma conversa para começar a conversar</p>
+                            </div>
+                        </div>
+                        <div class="chat-input">
+                            <input type="text" id="chatInput" placeholder="Digite sua mensagem...">
+                            <button class="btn-primary" onclick="sendMessage()">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relatórios -->
+            <div id="reports" class="page">
+                <div class="page-header">
+                    <h2>Relatórios</h2>
+                </div>
+                <div class="reports-container">
+                    <div class="reports-grid">
+                        <div class="report-card">
+                            <div class="report-icon">
+                                <i class="fas fa-chart-line"></i>
+                            </div>
+                            <div class="report-info">
+                                <h3>Relatório de Performance</h3>
+                                <p>Análise de produtividade e tempo de resolução</p>
+                                <button class="btn-primary" onclick="generatePerformanceReport()">
+                                    <i class="fas fa-download"></i> Gerar Relatório
+                                </button>
+                            </div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="report-info">
+                                <h3>Relatório de Agentes</h3>
+                                <p>Performance individual dos agentes</p>
+                                <button class="btn-primary" onclick="generateAgentReport()">
+                                    <i class="fas fa-download"></i> Gerar Relatório
+                                </button>
+                            </div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-icon">
+                                <i class="fas fa-smile"></i>
+                            </div>
+                            <div class="report-info">
+                                <h3>Relatório de Satisfação</h3>
+                                <p>Análise de satisfação dos clientes</p>
+                                <button class="btn-primary" onclick="generateSatisfactionReport()">
+                                    <i class="fas fa-download"></i> Gerar Relatório
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configurações -->
+            <div id="config" class="page">
+                <div class="page-header">
+                    <h2>Configurações</h2>
+                </div>
+                <div class="config-layout">
+                    <div class="config-sidebar">
+                        <ul class="config-menu">
+                            <li class="config-menu-item active" data-config-tab="users">
+                                <i class="fas fa-users"></i>
+                                <span>Usuários</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="forms">
+                                <i class="fas fa-wpforms"></i>
+                                <span>Formulários</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="workflows">
+                                <i class="fas fa-project-diagram"></i>
+                                <span>Workflows</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="backup">
+                                <i class="fas fa-database"></i>
+                                <span>Backup/Restore</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="audit">
+                                <i class="fas fa-clipboard-list"></i>
+                                <span>Auditoria</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="api">
+                                <i class="fas fa-code"></i>
+                                <span>API Externa</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="automation">
+                                <i class="fas fa-cogs"></i>
+                                <span>Automações</span>
+                            </li>
+                            <li class="config-menu-item" data-config-tab="fields">
+                                <i class="fas fa-list"></i>
+                                <span>Campos</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="config-content">
+                        <!-- Conteúdo das abas será carregado aqui -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- CRM -->
+            <div id="crm" class="page">
+                <div class="page-header">
+                    <h2>CRM</h2>
+                </div>
+                <div class="crm-container">
+                    <div class="crm-tabs">
+                        <button class="crm-tab active" onclick="switchCrmTab('contacts')">
+                            <i class="fas fa-users"></i>
+                            <span>Contatos</span>
+                        </button>
+                        <button class="crm-tab" onclick="switchCrmTab('companies')">
+                            <i class="fas fa-building"></i>
+                            <span>Empresas</span>
+                        </button>
+                        <button class="crm-tab" onclick="switchCrmTab('deals')">
+                            <i class="fas fa-handshake"></i>
+                            <span>Negócios</span>
+                        </button>
+                        <button class="crm-tab" onclick="switchCrmTab('activities')">
+                            <i class="fas fa-calendar"></i>
+                            <span>Atividades</span>
+                        </button>
+                    </div>
+                    
+                    <div class="crm-content">
+                        <div id="contactsTab" class="crm-tab-content active">
+                            <div class="crm-header">
+                                <h3>Contatos</h3>
+                                <button class="btn-primary" onclick="addNewContact()">
+                                    <i class="fas fa-plus"></i> Novo Contato
+                                </button>
+                            </div>
+                            <div class="crm-list" id="contactsList">
+                                <!-- Lista de contatos será carregada aqui -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Panel -->
+    <div class="notification-panel" id="notificationPanel">
+        <div class="notification-header">
+            <h3>Notificações</h3>
+            <button onclick="markAllAsRead()">
+                <i class="fas fa-check-double"></i>
+                Marcar todas como lidas
+            </button>
+        </div>
+        <div class="notification-list" id="notificationList">
+            <!-- Notificações serão carregadas aqui -->
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="login-simple.js"></script>
+</body>
+</html>

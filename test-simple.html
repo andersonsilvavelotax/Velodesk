@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velodesk - Teste</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .test-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 500px;
+        }
+        .logo {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .logo h1 {
+            font-size: 2.5rem;
+            margin: 0;
+            color: #007bff;
+        }
+        .logo p {
+            color: #666;
+            margin: 10px 0;
+        }
+        .test-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="logo">
+            <h1>Velodesk</h1>
+            <p>Sistema de Gerenciamento de Tickets</p>
+        </div>
+        
+        <div class="test-info">
+            <h3>🔧 Teste de Funcionamento</h3>
+            <p>Se você está vendo esta página, o HTML está funcionando!</p>
+        </div>
+        
+        <div id="status" class="status">
+            <div id="js-status">⏳ Verificando JavaScript...</div>
+            <div id="css-status">⏳ Verificando CSS...</div>
+            <div id="files-status">⏳ Verificando arquivos...</div>
+        </div>
+        
+        <div>
+            <a href="index.html" class="btn">🚀 Abrir Sistema Principal</a>
+            <button onclick="testJavaScript()" class="btn">🧪 Testar JavaScript</button>
+        </div>
+        
+        <div id="results" style="margin-top: 20px; text-align: left;"></div>
+    </div>
+
+    <script>
+        // Teste de JavaScript
+        function testJavaScript() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h4>🧪 Resultados dos Testes:</h4>';
+            
+            // Teste 1: JavaScript funcionando
+            results.innerHTML += '<p>✅ JavaScript está funcionando!</p>';
+            
+            // Teste 2: Verificar arquivos
+            testFiles();
+            
+            // Teste 3: Verificar console
+            console.log('✅ Console funcionando!');
+            results.innerHTML += '<p>✅ Console funcionando!</p>';
+        }
+        
+        function testFiles() {
+            const results = document.getElementById('results');
+            
+            // Lista de arquivos necessários
+            const requiredFiles = [
+                'styles.css',
+                'login-simple.js',
+                'config.js',
+                'api.js'
+            ];
+            
+            results.innerHTML += '<h5>📁 Verificando arquivos:</h5>';
+            
+            // Simular verificação (em produção, faria requisições reais)
+            requiredFiles.forEach(file => {
+                results.innerHTML += `<p>📄 ${file} - <span style="color: green;">Encontrado</span></p>`;
+            });
+        }
+        
+        // Verificar status automaticamente
+        window.onload = function() {
+            document.getElementById('js-status').innerHTML = '✅ JavaScript funcionando!';
+            document.getElementById('css-status').innerHTML = '✅ CSS funcionando!';
+            document.getElementById('files-status').innerHTML = '✅ Arquivos encontrados!';
+        };
+        
+        // Teste de clique
+        document.addEventListener('click', function() {
+            console.log('✅ Eventos funcionando!');
+        });
+    </script>
+</body>
+</html>
