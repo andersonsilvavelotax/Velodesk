@@ -14772,6 +14772,11 @@ input:checked + .slider:before {
     color: var(--config-muted);
 }
 
+#config .config-welcome-card-demo {
+    border-color: rgba(91, 110, 232, 0.35);
+    background: linear-gradient(135deg, #fafbff 0%, #f3f6ff 100%);
+}
+
 #config .config-panel {
     border: 1px solid var(--config-border);
     border-radius: calc(var(--config-radius) + 2px);

@@ -49,7 +49,13 @@ function navigateToPage(page) {
     }
     
     // Carregar dados específicos da página
-    if (page === 'dashboard') {
+    if (page === 'workspace') {
+        if (typeof renderWorkspace360 === 'function') renderWorkspace360();
+    } else if (page === 'analytics-ia') {
+        if (typeof renderAnalyticsIA === 'function') renderAnalyticsIA();
+    } else if (page === 'client-portal') {
+        if (typeof renderClientPortal === 'function') renderClientPortal();
+    } else if (page === 'dashboard') {
         loadDashboardStats();
     } else if (page === 'tickets') {
         // Garantir que a página de tickets seja restaurada corretamente

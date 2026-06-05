@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Velodesk - Sistema de Tickets</title>
-    <link rel="stylesheet" href="styles.css?v=4">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="velodesk-ecosystem.css?v=2">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -43,8 +47,27 @@
                         <i class="fas fa-bars"></i>
                     </button>
                     <h1>Velodesk</h1>
+                    <button type="button" class="profile-role-badge" id="profileRoleBadge" onclick="toggleProfileSwitcher()" title="Trocar perfil">
+                        <i class="fas fa-headset"></i> <span>Agente</span> <i class="fas fa-chevron-down eco-badge-chevron"></i>
+                    </button>
+                    <div class="eco-profile-dropdown" id="ecoProfileDropdown">
+                        <div class="eco-profile-dropdown-header">Visão do portal</div>
+                        <button type="button" class="eco-profile-btn active" data-profile="agent" onclick="switchVelodeskProfile('agent')"><i class="fas fa-headset"></i> Agente</button>
+                        <button type="button" class="eco-profile-btn" data-profile="supervisor" onclick="switchVelodeskProfile('supervisor')"><i class="fas fa-user-tie"></i> Supervisor</button>
+                        <button type="button" class="eco-profile-btn" data-profile="monitor" onclick="switchVelodeskProfile('monitor')"><i class="fas fa-clipboard-check"></i> Monitoria</button>
+                        <button type="button" class="eco-profile-btn" data-profile="training" onclick="switchVelodeskProfile('training')"><i class="fas fa-graduation-cap"></i> Treinamento</button>
+                        <button type="button" class="eco-profile-btn" data-profile="management" onclick="switchVelodeskProfile('management')"><i class="fas fa-chart-line"></i> Gestão</button>
+                    </div>
                 </div>
                 <div class="header-actions">
+                    <div class="header-eco-actions">
+                        <button type="button" class="btn-eco-ghost" onclick="openClient360('cliente-demo')" title="Histórico 360° do cliente">
+                            <i class="fas fa-user-circle"></i> <span>Cliente 360°</span>
+                        </button>
+                        <button type="button" class="btn-eco-call" onclick="toggleCallAssist()" title="Atendimento IA na ligação">
+                            <i class="fas fa-wand-magic-sparkles"></i> <span>IA Ligação</span>
+                        </button>
+                    </div>
                     <div class="notification-bell" onclick="toggleNotificationPanel()">
                         <i class="fas fa-bell"></i>
                         <span class="notification-badge" id="notificationBadge">0</span>
@@ -60,7 +83,11 @@
         <!-- Sidebar -->
         <nav class="sidebar" id="mainSidebar">
             <ul class="nav-list">
-                <li class="nav-item active" data-page="dashboard" data-tooltip="Dashboard" onclick="navigateToPageMobile('dashboard')">
+                <li class="nav-item active" data-page="workspace" data-tooltip="Painel 360°" onclick="navigateToPageMobile('workspace')">
+                    <i class="fas fa-th-large"></i>
+                    <span>Painel 360°</span>
+                </li>
+                <li class="nav-item" data-page="dashboard" data-tooltip="Dashboard" onclick="navigateToPageMobile('dashboard')">
                     <i class="fas fa-tachometer-alt"></i>
                     <span>Dashboard</span>
                 </li>
@@ -72,9 +99,17 @@
                     <i class="fas fa-comments"></i>
                     <span>Chat</span>
                 </li>
+                <li class="nav-item" data-page="analytics-ia" data-tooltip="Analytics IA" onclick="navigateToPageMobile('analytics-ia')">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Analytics IA</span>
+                </li>
                 <li class="nav-item" data-page="reports" data-tooltip="Relatórios" onclick="navigateToPageMobile('reports')">
                     <i class="fas fa-chart-bar"></i>
                     <span>Relatórios</span>
+                </li>
+                <li class="nav-item" data-page="client-portal" data-tooltip="Portal do Cliente" onclick="navigateToPageMobile('client-portal')">
+                    <i class="fas fa-external-link-alt"></i>
+                    <span>Portal Cliente</span>
                 </li>
                 <li class="nav-item" data-page="config" data-tooltip="Configurações" onclick="navigateToPageMobile('config')">
                     <i class="fas fa-cog"></i>
@@ -85,7 +120,7 @@
                     <span>Assistente IA</span>
                 </li>
             </ul>
-            
+
             <!-- Botão Meu Perfil -->
             <div class="profile-section">
                 <button class="profile-btn" id="profileBtn" onclick="toggleProfileMenu()">
@@ -112,8 +147,13 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Painel 360° por Perfil -->
+            <div id="workspace" class="page workspace-page eco-page active">
+                <div id="workspace360Content" class="eco-page-inner"></div>
+            </div>
+
             <!-- Dashboard -->
-            <div id="dashboard" class="page active">
+            <div id="dashboard" class="page">
                 <div class="page-header">
                     <h2>Dashboard Executivo</h2>
                     <div class="header-actions">
@@ -867,6 +907,16 @@
             </div>
 
             <!-- Configurações -->
+            <!-- Analytics IA -->
+            <div id="analytics-ia" class="page eco-page">
+                <div id="analyticsIAContent" class="eco-page-inner"></div>
+            </div>
+
+            <!-- Portal do Cliente (preview) -->
+            <div id="client-portal" class="page eco-page">
+                <div id="clientPortalContent" class="eco-page-inner"></div>
+            </div>
+
             <div id="config" class="page config-page">
                 <div class="page-header">
                     <h2>Configurações</h2>
@@ -1368,6 +1418,7 @@
     
     <!-- Scripts -->
     <script src="login-simple-fixed.js"></script>
+    <script src="velodesk-ecosystem.js?v=2"></script>
     
 </body>
 </html>
