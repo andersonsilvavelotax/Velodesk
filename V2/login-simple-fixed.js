@@ -5015,6 +5015,13 @@ const CONFIG_TAB_PANEL_IDS = {
     automation: 'configAutomationTab'
 };
 
+function updateConfigContentHeader(title, desc) {
+    const titleEl = document.getElementById('configActiveTitle');
+    const descEl = document.getElementById('configActiveDesc');
+    if (titleEl) titleEl.textContent = title || 'Bem-vindo';
+    if (descEl) descEl.textContent = desc || 'Escolha uma área no menu ou nos atalhos abaixo para começar.';
+}
+
 function showConfigPlaceholder() {
     document.querySelectorAll('.config-menu-item').forEach(item => item.classList.remove('active'));
     document.querySelectorAll('#config .config-content > .config-tab-content').forEach(content => {
@@ -5026,6 +5033,7 @@ function showConfigPlaceholder() {
         ph.classList.add('active');
         ph.setAttribute('aria-hidden', 'false');
     }
+    updateConfigContentHeader('Bem-vindo', 'Escolha uma área no menu ou nos atalhos abaixo para começar.');
 }
 
 // Função para carregar configurações
@@ -5179,6 +5187,103 @@ function createTestFormIfNeeded() {
     }
 }
 
+// Chaves incluídas em backup completo / restauração
+const VELDESK_BACKUP_KEYS = [
+    'kanbanColumns', 'forms', 'users', 'customFields', 'workflows',
+    'whatsappSettings', 'whatsappConversations', 'whatsappConversationMessages',
+    'apiKeys', 'automationRules', 'importedTickets', 'auditLogs', 'scheduledBackupConfig'
+];
+
+function findItemById(collection, id) {
+    if (!Array.isArray(collection)) return null;
+    const num = Number(id);
+    return collection.find(item => Number(item.id) === num || String(item.id) === String(id)) || null;
+}
+
+function collectBackupSnapshot() {
+    const data = {};
+    VELDESK_BACKUP_KEYS.forEach(key => {
+        const val = localStorage.getItem(key);
+        if (val !== null) data[key] = val;
+    });
+    return data;
+}
+
+function restoreBackupSnapshot(data) {
+    if (!data || typeof data !== 'object') return;
+    VELDESK_BACKUP_KEYS.forEach(key => {
+        if (data[key] !== undefined && data[key] !== null) {
+            localStorage.setItem(key, data[key]);
+        }
+    });
+}
+
+function getAutomationRules() {
+    let rules = JSON.parse(localStorage.getItem('automationRules') || '[]');
+    if (!rules.length) {
+        rules = [{
+            id: Date.now(),
+            name: 'Auto-atribuição de Tickets',
+            description: 'Atribui automaticamente tickets novos ao primeiro agente disponível',
+            trigger: 'ticket-created',
+            action: 'assign-first-agent',
+            active: true,
+            createdAt: new Date().toISOString()
+        }];
+        localStorage.setItem('automationRules', JSON.stringify(rules));
+    }
+    return rules;
+}
+
+function getAutomationTriggerLabel(trigger) {
+    const map = {
+        'ticket-created': 'Ticket criado',
+        'ticket-updated': 'Ticket atualizado',
+        'ticket-status-changed': 'Status alterado',
+        'ticket-assigned': 'Ticket atribuído',
+        'message-received': 'Mensagem recebida'
+    };
+    return map[trigger] || trigger;
+}
+
+function getAutomationActionLabel(action) {
+    const map = {
+        'assign-first-agent': 'Atribuir ao primeiro agente',
+        'notify-supervisor': 'Notificar supervisor',
+        'set-priority-high': 'Definir prioridade alta',
+        'add-tag': 'Adicionar tag',
+        'send-auto-reply': 'Enviar resposta automática'
+    };
+    return map[action] || action;
+}
+
+function openConfigInfoModal(title, bodyHtml, footerHtml) {
+    const existing = document.getElementById('configInfoModal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'configInfoModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content modal-content--forms-new">
+            <div class="modal-header">
+                <h3>${escapeHtml(title)}</h3>
+                <button type="button" class="close-btn" onclick="closeConfigInfoModal()" aria-label="Fechar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">${bodyHtml}</div>
+            <div class="modal-footer">${footerHtml || '<button type="button" class="btn-primary" onclick="closeConfigInfoModal()">Fechar</button>'}</div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function closeConfigInfoModal() {
+    const modal = document.getElementById('configInfoModal');
+    if (modal) modal.remove();
+}
+
 // Função para configurar event listeners dos botões de configuração
 function setupConfigButtons() {
     // Botão Adicionar Formulário
@@ -5198,14 +5303,16 @@ function setupConfigButtons() {
 function setupConfigTabListeners() {
     if (window.__velodeskConfigMenuBound) return;
     window.__velodeskConfigMenuBound = true;
-    const menu = document.querySelector('#config .config-menu');
-    if (!menu) return;
-    menu.addEventListener('click', function(e) {
-        const item = e.target.closest('.config-menu-item');
-        if (!item) return;
-        e.preventDefault();
-        const tabName = item.getAttribute('data-config-tab');
-        if (tabName) switchConfigTab(tabName);
+    const configRoot = document.getElementById('config');
+    if (!configRoot) return;
+    configRoot.addEventListener('click', function(e) {
+        const item = e.target.closest('[data-config-tab]');
+        if (!item || !configRoot.contains(item)) return;
+        if (item.classList.contains('config-menu-item') || item.classList.contains('config-welcome-card')) {
+            e.preventDefault();
+            const tabName = item.getAttribute('data-config-tab');
+            if (tabName) switchConfigTab(tabName);
+        }
     });
 }
 
@@ -5216,7 +5323,13 @@ function switchConfigTab(tabName) {
 
     document.querySelectorAll('.config-menu-item').forEach(item => item.classList.remove('active'));
     const activeItem = document.querySelector(`#config .config-menu [data-config-tab="${tabName}"]`);
-    if (activeItem) activeItem.classList.add('active');
+    if (activeItem) {
+        activeItem.classList.add('active');
+        updateConfigContentHeader(
+            activeItem.getAttribute('data-config-title') || activeItem.querySelector('.config-menu-label')?.textContent,
+            activeItem.getAttribute('data-config-desc') || ''
+        );
+    }
 
     document.querySelectorAll('#config .config-content > .config-tab-content').forEach(content => {
         content.classList.remove('active');
@@ -5417,10 +5530,13 @@ function loadWorkflowsTab() {
                 </span>
             </div>
             <div class="workflow-actions">
-                <button class="btn-secondary" onclick="editWorkflow(${workflow.id})">
+                <button type="button" class="btn-secondary" onclick="toggleWorkflowActive(${workflow.id})" title="${workflow.active ? 'Desativar' : 'Ativar'}">
+                    <i class="fas fa-power-off"></i>
+                </button>
+                <button type="button" class="btn-secondary" onclick="editWorkflow(${workflow.id})" title="Editar">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn-danger" onclick="deleteWorkflow(${workflow.id})">
+                <button type="button" class="btn-danger" onclick="deleteWorkflow(${workflow.id})" title="Excluir">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -5631,26 +5747,52 @@ function loadApiTab() {
 
 // Função para carregar aba de automações
 function loadAutomationTab() {
-    const automationRules = document.getElementById('configAutomationRules');
-    if (!automationRules) return;
-    
-    automationRules.innerHTML = `
-        <div class="automation-rule-item">
+    const automationRulesEl = document.getElementById('configAutomationRules');
+    if (!automationRulesEl) return;
+
+    const addAutomationBtn = document.getElementById('addAutomation');
+    if (addAutomationBtn && !addAutomationBtn.onclick) {
+        addAutomationBtn.onclick = addAutomation;
+    }
+
+    const rules = getAutomationRules();
+
+    if (!rules.length) {
+        automationRulesEl.innerHTML = `
+            <div class="no-data">
+                <i class="fas fa-bolt"></i>
+                <p>Nenhuma regra de automação ainda.</p>
+                <p>Clique em <strong>Nova Automação</strong> para criar a primeira.</p>
+            </div>
+        `;
+        return;
+    }
+
+    automationRulesEl.innerHTML = '';
+    rules.forEach(rule => {
+        const item = document.createElement('div');
+        item.className = 'automation-rule-item';
+        item.innerHTML = `
             <div class="rule-info">
-                <h4>Auto-atribuição de Tickets</h4>
-                <p>Atribui automaticamente tickets novos ao primeiro agente disponível</p>
-                <span class="rule-status active">Ativa</span>
+                <h4>${escapeHtml(rule.name)}</h4>
+                <p>${escapeHtml(rule.description || 'Sem descrição')}</p>
+                <p class="field-detail"><strong>Gatilho:</strong> ${escapeHtml(getAutomationTriggerLabel(rule.trigger))} · <strong>Ação:</strong> ${escapeHtml(getAutomationActionLabel(rule.action))}</p>
+                <span class="rule-status ${rule.active ? 'active' : 'inactive'}">${rule.active ? 'Ativa' : 'Inativa'}</span>
             </div>
             <div class="rule-actions">
-                <button class="btn-secondary" onclick="editAutomation(1)">
+                <button type="button" class="btn-secondary" onclick="toggleAutomationActive(${rule.id})" title="Ativar/Desativar">
+                    <i class="fas fa-power-off"></i>
+                </button>
+                <button type="button" class="btn-secondary" onclick="editAutomation(${rule.id})" title="Editar">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn-danger" onclick="deleteAutomation(1)">
+                <button type="button" class="btn-danger" onclick="deleteAutomation(${rule.id})" title="Excluir">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
-        </div>
-    `;
+        `;
+        automationRulesEl.appendChild(item);
+    });
 }
 
 // Função para carregar aba de campos
@@ -5980,7 +6122,7 @@ function editForm(formId) {
     
     // Buscar o formulário no localStorage
     const forms = JSON.parse(localStorage.getItem('forms') || '[]');
-    const form = forms.find(f => f.id === formId);
+    const form = findItemById(forms, formId);
     
     if (!form) {
         showNotification('Formulário não encontrado!', 'error');
@@ -6816,54 +6958,7 @@ function deleteForm(formId) {
 
 // Funções para workflows
 function createNewWorkflow() {
-    console.log('Criando novo workflow...');
-    
-    const modal = document.createElement('div');
-    modal.id = 'newWorkflowModal';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Novo Workflow</h3>
-                <button class="close-btn" onclick="closeNewWorkflowModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="workflowName">Nome do Workflow:</label>
-                    <input type="text" id="workflowName" placeholder="Ex: Auto-atribuição de Tickets" required>
-                </div>
-                <div class="form-group">
-                    <label for="workflowDescription">Descrição:</label>
-                    <textarea id="workflowDescription" placeholder="Descreva o que este workflow faz" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="workflowTrigger">Gatilho:</label>
-                    <select id="workflowTrigger">
-                        <option value="ticket-created">Ticket Criado</option>
-                        <option value="ticket-updated">Ticket Atualizado</option>
-                        <option value="ticket-status-changed">Status Alterado</option>
-                        <option value="ticket-assigned">Ticket Atribuído</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="workflowActive" checked>
-                        Workflow Ativo
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeNewWorkflowModal()">Cancelar</button>
-                <button class="btn-primary" onclick="saveNewWorkflow()">Salvar Workflow</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
+    openWorkflowModal(null);
 }
 
 function closeNewWorkflowModal() {
@@ -6874,34 +6969,7 @@ function closeNewWorkflowModal() {
 }
 
 function saveNewWorkflow() {
-    const name = document.getElementById('workflowName').value.trim();
-    const description = document.getElementById('workflowDescription').value.trim();
-    const trigger = document.getElementById('workflowTrigger').value;
-    const active = document.getElementById('workflowActive').checked;
-    
-    if (!name) {
-        showNotification('Por favor, digite o nome do workflow!', 'error');
-        return;
-    }
-    
-    const workflows = JSON.parse(localStorage.getItem('workflows') || '[]');
-    
-    const newWorkflow = {
-        id: Date.now(),
-        name: name,
-        description: description,
-        trigger: trigger,
-        active: active,
-        actions: [],
-        createdAt: new Date().toISOString()
-    };
-    
-    workflows.push(newWorkflow);
-    localStorage.setItem('workflows', JSON.stringify(workflows));
-    
-    closeNewWorkflowModal();
-    loadWorkflowsTab();
-    showNotification('Workflow criado com sucesso!', 'success');
+    saveWorkflowFromModal();
 }
 
 function loadWorkflows() {
@@ -6909,25 +6977,131 @@ function loadWorkflows() {
     loadWorkflowsTab();
 }
 
-function editWorkflow(workflowId) {
-    console.log('Editando workflow:', workflowId);
-    
+function openWorkflowModal(workflow) {
+    const isEdit = !!workflow;
+    const existing = document.getElementById('newWorkflowModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'newWorkflowModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.dataset.workflowId = isEdit ? String(workflow.id) : '';
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>${isEdit ? 'Editar Workflow' : 'Novo Workflow'}</h3>
+                <button type="button" class="close-btn" onclick="closeNewWorkflowModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="workflowName">Nome do Workflow:</label>
+                    <input type="text" id="workflowName" placeholder="Ex: Auto-atribuição de Tickets" value="${isEdit ? escapeHtml(workflow.name) : ''}" required>
+                </div>
+                <div class="form-group">
+                    <label for="workflowDescription">Descrição:</label>
+                    <textarea id="workflowDescription" placeholder="Descreva o que este workflow faz" rows="3">${isEdit ? escapeHtml(workflow.description || '') : ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="workflowTrigger">Gatilho:</label>
+                    <select id="workflowTrigger">
+                        <option value="ticket-created" ${isEdit && workflow.trigger === 'ticket-created' ? 'selected' : ''}>Ticket Criado</option>
+                        <option value="ticket-updated" ${isEdit && workflow.trigger === 'ticket-updated' ? 'selected' : ''}>Ticket Atualizado</option>
+                        <option value="ticket-status-changed" ${isEdit && workflow.trigger === 'ticket-status-changed' ? 'selected' : ''}>Status Alterado</option>
+                        <option value="ticket-assigned" ${isEdit && workflow.trigger === 'ticket-assigned' ? 'selected' : ''}>Ticket Atribuído</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="workflowActive" ${!isEdit || workflow.active ? 'checked' : ''}>
+                        Workflow Ativo
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeNewWorkflowModal()">Cancelar</button>
+                <button type="button" class="btn-primary" onclick="saveWorkflowFromModal()">${isEdit ? 'Salvar alterações' : 'Salvar Workflow'}</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+function saveWorkflowFromModal() {
+    const modal = document.getElementById('newWorkflowModal');
+    const name = document.getElementById('workflowName')?.value.trim();
+    const description = document.getElementById('workflowDescription')?.value.trim() || '';
+    const trigger = document.getElementById('workflowTrigger')?.value;
+    const active = document.getElementById('workflowActive')?.checked;
+
+    if (!name) {
+        showNotification('Por favor, digite o nome do workflow!', 'error');
+        return;
+    }
+
     const workflows = JSON.parse(localStorage.getItem('workflows') || '[]');
-    const workflow = workflows.find(w => w.id === workflowId);
-    
+    const editId = modal?.dataset.workflowId;
+
+    if (editId) {
+        const workflow = findItemById(workflows, editId);
+        if (!workflow) {
+            showNotification('Workflow não encontrado!', 'error');
+            return;
+        }
+        workflow.name = name;
+        workflow.description = description;
+        workflow.trigger = trigger;
+        workflow.active = active;
+        workflow.updatedAt = new Date().toISOString();
+    } else {
+        workflows.push({
+            id: Date.now(),
+            name,
+            description,
+            trigger,
+            active,
+            actions: [],
+            createdAt: new Date().toISOString()
+        });
+    }
+
+    localStorage.setItem('workflows', JSON.stringify(workflows));
+    closeNewWorkflowModal();
+    loadWorkflowsTab();
+    showNotification(editId ? 'Workflow atualizado com sucesso!' : 'Workflow criado com sucesso!', 'success');
+}
+
+function editWorkflow(workflowId) {
+    const workflows = JSON.parse(localStorage.getItem('workflows') || '[]');
+    const workflow = findItemById(workflows, workflowId);
     if (!workflow) {
         showNotification('Workflow não encontrado!', 'error');
         return;
     }
-    
-    // Criar modal de edição similar ao de criação
-    showNotification('Funcionalidade de edição de workflow em desenvolvimento', 'info');
+    openWorkflowModal(workflow);
+}
+
+function toggleWorkflowActive(workflowId) {
+    const workflows = JSON.parse(localStorage.getItem('workflows') || '[]');
+    const workflow = findItemById(workflows, workflowId);
+    if (!workflow) {
+        showNotification('Workflow não encontrado!', 'error');
+        return;
+    }
+    workflow.active = !workflow.active;
+    localStorage.setItem('workflows', JSON.stringify(workflows));
+    loadWorkflowsTab();
+    showNotification(`Workflow ${workflow.active ? 'ativado' : 'desativado'}!`, 'success');
 }
 
 function deleteWorkflow(workflowId) {
     if (confirm('Tem certeza que deseja excluir este workflow?')) {
         const workflows = JSON.parse(localStorage.getItem('workflows') || '[]');
-        const filteredWorkflows = workflows.filter(w => w.id !== workflowId);
+        const filteredWorkflows = workflows.filter(w => Number(w.id) !== Number(workflowId) && String(w.id) !== String(workflowId));
         localStorage.setItem('workflows', JSON.stringify(filteredWorkflows));
         loadWorkflowsTab();
         showNotification('Workflow excluído com sucesso!', 'success');
@@ -6936,20 +7110,8 @@ function deleteWorkflow(workflowId) {
 
 // Funções para backup
 function createFullBackup() {
-    console.log('Criando backup completo...');
-    
     try {
-        // Coletar todos os dados do sistema
-        const backupData = {
-            kanbanColumns: localStorage.getItem('kanbanColumns'),
-            forms: localStorage.getItem('forms'),
-            users: localStorage.getItem('users'),
-            customFields: localStorage.getItem('customFields'),
-            workflows: localStorage.getItem('workflows'),
-            whatsappSettings: localStorage.getItem('whatsappSettings'),
-            whatsappConversations: localStorage.getItem('whatsappConversations')
-        };
-        
+        const backupData = collectBackupSnapshot();
         const backup = {
             id: Date.now(),
             type: 'full',
@@ -6957,11 +7119,14 @@ function createFullBackup() {
             data: backupData,
             size: JSON.stringify(backupData).length
         };
-        
+
         const backups = JSON.parse(localStorage.getItem('backups') || '[]');
         backups.push(backup);
         localStorage.setItem('backups', JSON.stringify(backups));
-        
+
+        if (typeof addAuditLog === 'function') {
+            addAuditLog('Backup Completo', `Backup criado (${(backup.size / 1024).toFixed(1)} KB)`, 'Sistema');
+        }
         showNotification('Backup completo criado com sucesso!', 'success');
         loadBackupTab();
     } catch (error) {
@@ -7005,47 +7170,89 @@ function createIncrementalBackup() {
 }
 
 function configureScheduledBackup() {
-    console.log('Configurando backup agendado...');
-    showNotification('Funcionalidade de backup agendado em desenvolvimento', 'info');
+    const config = JSON.parse(localStorage.getItem('scheduledBackupConfig') || '{}');
+    const existing = document.getElementById('scheduledBackupModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'scheduledBackupModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Backup agendado</h3>
+                <button type="button" class="close-btn" onclick="closeScheduledBackupModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="forms-modal-lead">Defina a frequência dos backups automáticos locais (simulado no navegador).</p>
+                <div class="form-group">
+                    <label><input type="checkbox" id="scheduledBackupEnabled" ${config.enabled ? 'checked' : ''}> Ativar backup agendado</label>
+                </div>
+                <div class="form-group">
+                    <label for="scheduledBackupFrequency">Frequência</label>
+                    <select id="scheduledBackupFrequency">
+                        <option value="daily" ${config.frequency === 'daily' ? 'selected' : ''}>Diário</option>
+                        <option value="weekly" ${config.frequency === 'weekly' ? 'selected' : ''}>Semanal</option>
+                        <option value="monthly" ${config.frequency === 'monthly' ? 'selected' : ''}>Mensal</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="scheduledBackupTime">Horário</label>
+                    <input type="time" id="scheduledBackupTime" value="${config.time || '02:00'}">
+                </div>
+                ${config.lastRun ? `<p class="forms-toolbar-hint">Última execução: ${new Date(config.lastRun).toLocaleString('pt-BR')}</p>` : ''}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeScheduledBackupModal()">Cancelar</button>
+                <button type="button" class="btn-primary" onclick="saveScheduledBackupConfig()">Salvar agendamento</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function closeScheduledBackupModal() {
+    const modal = document.getElementById('scheduledBackupModal');
+    if (modal) modal.remove();
+}
+
+function saveScheduledBackupConfig() {
+    const config = {
+        enabled: document.getElementById('scheduledBackupEnabled')?.checked || false,
+        frequency: document.getElementById('scheduledBackupFrequency')?.value || 'daily',
+        time: document.getElementById('scheduledBackupTime')?.value || '02:00',
+        updatedAt: new Date().toISOString(),
+        lastRun: JSON.parse(localStorage.getItem('scheduledBackupConfig') || '{}').lastRun || null
+    };
+    localStorage.setItem('scheduledBackupConfig', JSON.stringify(config));
+    closeScheduledBackupModal();
+    showNotification(config.enabled ? 'Backup agendado configurado!' : 'Backup agendado desativado.', 'success');
 }
 
 function restoreBackup(backupId) {
     if (!confirm('Tem certeza que deseja restaurar este backup? Todos os dados atuais serão substituídos!')) {
         return;
     }
-    
+
     try {
         const backups = JSON.parse(localStorage.getItem('backups') || '[]');
-        const backup = backups.find(b => b.id === backupId);
-        
+        const backup = findItemById(backups, backupId);
+
         if (!backup) {
             showNotification('Backup não encontrado!', 'error');
             return;
         }
-        
-        // Restaurar dados
-        if (backup.data.kanbanColumns) {
-            localStorage.setItem('kanbanColumns', backup.data.kanbanColumns);
+
+        restoreBackupSnapshot(backup.data);
+
+        if (typeof addAuditLog === 'function') {
+            addAuditLog('Backup Restaurado', `Backup ${backup.type} de ${new Date(backup.createdAt).toLocaleString('pt-BR')}`, 'Sistema');
         }
-        if (backup.data.forms) {
-            localStorage.setItem('forms', backup.data.forms);
-        }
-        if (backup.data.users) {
-            localStorage.setItem('users', backup.data.users);
-        }
-        if (backup.data.customFields) {
-            localStorage.setItem('customFields', backup.data.customFields);
-        }
-        if (backup.data.workflows) {
-            localStorage.setItem('workflows', backup.data.workflows);
-        }
-        
-        showNotification('Backup restaurado com sucesso! Recarregue a página para ver as alterações.', 'success');
-        
-        // Recarregar abas
-        setTimeout(() => {
-            loadConfig();
-        }, 1000);
+        showNotification('Backup restaurado com sucesso!', 'success');
+        loadConfig();
+        if (typeof loadTickets === 'function') loadTickets();
+        if (typeof loadDashboard === 'function') loadDashboard();
     } catch (error) {
         console.error('Erro ao restaurar backup:', error);
         showNotification('Erro ao restaurar backup!', 'error');
@@ -7055,7 +7262,7 @@ function restoreBackup(backupId) {
 function deleteBackup(backupId) {
     if (confirm('Tem certeza que deseja excluir este backup?')) {
         const backups = JSON.parse(localStorage.getItem('backups') || '[]');
-        const filteredBackups = backups.filter(b => b.id !== backupId);
+        const filteredBackups = backups.filter(b => Number(b.id) !== Number(backupId) && String(b.id) !== String(backupId));
         localStorage.setItem('backups', JSON.stringify(filteredBackups));
         loadBackupTab();
         showNotification('Backup excluído com sucesso!', 'success');
@@ -7350,8 +7557,21 @@ function loadApiKeys() {
 }
 
 function openApiDocumentation() {
-    console.log('Abrindo documentação da API...');
-    showNotification('Documentação da API em desenvolvimento', 'info');
+    const baseUrl = (window.VELDESK_API_BASE || 'http://localhost:3000').replace(/\/$/, '');
+    openConfigInfoModal('Documentação da API', `
+        <p>Use o header <code>Authorization: Bearer &lt;sua-chave&gt;</code> em todas as requisições.</p>
+        <ul class="forms-config-steps" style="margin-top:1rem;">
+            <li><strong>GET</strong> ${escapeHtml(baseUrl)}/api/tickets — listar tickets</li>
+            <li><strong>GET</strong> ${escapeHtml(baseUrl)}/api/tickets/:id — obter ticket</li>
+            <li><strong>POST</strong> ${escapeHtml(baseUrl)}/api/tickets — criar ticket</li>
+            <li><strong>PUT</strong> ${escapeHtml(baseUrl)}/api/tickets/:id — atualizar ticket</li>
+            <li><strong>DELETE</strong> ${escapeHtml(baseUrl)}/api/tickets/:id — excluir ticket</li>
+            <li><strong>GET</strong> ${escapeHtml(baseUrl)}/api/forms — listar formulários</li>
+            <li><strong>GET</strong> ${escapeHtml(baseUrl)}/api/users — listar usuários</li>
+            <li><strong>GET</strong> ${escapeHtml(baseUrl)}/api/stats — estatísticas</li>
+        </ul>
+        <p class="forms-toolbar-hint" style="margin-top:1rem;">Gere uma chave em <strong>Nova Chave API</strong> e teste os endpoints na lista abaixo.</p>
+    `);
 }
 
 function regenerateApiKey(keyId) {
@@ -7360,14 +7580,13 @@ function regenerateApiKey(keyId) {
     }
     
     const apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '[]');
-    const keyIndex = apiKeys.findIndex(k => k.id === keyId);
-    
+    const keyIndex = apiKeys.findIndex(k => Number(k.id) === Number(keyId) || String(k.id) === String(keyId));
+
     if (keyIndex === -1) {
         showNotification('Chave não encontrada!', 'error');
         return;
     }
-    
-    // Gerar nova chave
+
     const newApiKey = 'sk-' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
@@ -7390,8 +7609,8 @@ function deleteApiKey(keyId) {
     }
     
     const apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '[]');
-    const key = apiKeys.find(k => k.id === keyId);
-    const filteredKeys = apiKeys.filter(k => k.id !== keyId);
+    const key = findItemById(apiKeys, keyId);
+    const filteredKeys = apiKeys.filter(k => Number(k.id) !== Number(keyId) && String(k.id) !== String(keyId));
     
     localStorage.setItem('apiKeys', JSON.stringify(filteredKeys));
     
@@ -7403,27 +7622,196 @@ function deleteApiKey(keyId) {
 }
 
 function testEndpoint(method, path) {
-    console.log(`Testando endpoint: ${method} ${path}`);
-    showNotification(`Endpoint ${method} ${path} testado com sucesso!`, 'success');
+    const baseUrl = (window.VELDESK_API_BASE || 'http://localhost:3000').replace(/\/$/, '');
+    const url = baseUrl + path.replace(':id', '1');
+    window.__lastEndpointTest = { method, url };
+    const apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '[]');
+    const activeKey = apiKeys.find(k => k.active);
+    const curl = `curl -X ${method} "${url}"${activeKey ? ` \\\n  -H "Authorization: Bearer ${activeKey.key}"` : ''}`;
+
+    openConfigInfoModal(`Testar ${method} ${path}`, `
+        <p>URL de teste:</p>
+        <pre style="background:#f1f5f9;padding:0.75rem;border-radius:8px;overflow:auto;font-size:0.8rem;">${escapeHtml(url)}</pre>
+        <p style="margin-top:0.75rem;">Exemplo cURL:</p>
+        <pre style="background:#f1f5f9;padding:0.75rem;border-radius:8px;overflow:auto;font-size:0.8rem;white-space:pre-wrap;">${escapeHtml(curl)}</pre>
+        ${!activeKey ? '<p class="forms-toolbar-hint">Crie uma chave API ativa para autenticar a requisição.</p>' : ''}
+        <p id="endpointTestResult" class="forms-toolbar-hint" style="margin-top:0.75rem;"></p>
+    `, `
+        <button type="button" class="btn-secondary" onclick="closeConfigInfoModal()">Fechar</button>
+        <button type="button" class="btn-primary" onclick="runEndpointTest()">Executar teste</button>
+    `);
 }
 
-// Funções para automações
+async function runEndpointTest() {
+    const { method, url } = window.__lastEndpointTest || {};
+    if (!method || !url) return;
+    const resultEl = document.getElementById('endpointTestResult');
+    if (resultEl) resultEl.textContent = 'Testando...';
+
+    const apiKeys = JSON.parse(localStorage.getItem('apiKeys') || '[]');
+    const activeKey = apiKeys.find(k => k.active);
+    const headers = { Accept: 'application/json' };
+    if (activeKey) headers.Authorization = 'Bearer ' + activeKey.key;
+
+    try {
+        const response = await fetch(url, { method, headers });
+        const text = await response.text();
+        const summary = `HTTP ${response.status} — ${text.slice(0, 200)}${text.length > 200 ? '…' : ''}`;
+        if (resultEl) {
+            resultEl.textContent = response.ok ? 'Sucesso: ' + summary : 'Resposta: ' + summary;
+        }
+        showNotification(response.ok ? 'Endpoint respondeu com sucesso!' : `Endpoint respondeu com status ${response.status}`, response.ok ? 'success' : 'warning');
+    } catch (err) {
+        const msg = 'Servidor indisponível (backend em ' + (window.VELDESK_API_BASE || 'http://localhost:3000') + '). O teste de URL/cURL acima ainda é válido.';
+        if (resultEl) resultEl.textContent = msg;
+        showNotification(msg, 'warning');
+    }
+}
+
+function openAutomationModal(rule) {
+    const isEdit = !!rule;
+    const existing = document.getElementById('automationRuleModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'automationRuleModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.dataset.ruleId = isEdit ? String(rule.id) : '';
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>${isEdit ? 'Editar automação' : 'Nova automação'}</h3>
+                <button type="button" class="close-btn" onclick="closeAutomationModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="automationName">Nome</label>
+                    <input type="text" id="automationName" value="${isEdit ? escapeHtml(rule.name) : ''}" placeholder="Ex: Escalar ticket urgente">
+                </div>
+                <div class="form-group">
+                    <label for="automationDescription">Descrição</label>
+                    <textarea id="automationDescription" rows="2" placeholder="O que esta regra faz?">${isEdit ? escapeHtml(rule.description || '') : ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="automationTrigger">Gatilho</label>
+                    <select id="automationTrigger">
+                        <option value="ticket-created" ${isEdit && rule.trigger === 'ticket-created' ? 'selected' : ''}>Ticket criado</option>
+                        <option value="ticket-updated" ${isEdit && rule.trigger === 'ticket-updated' ? 'selected' : ''}>Ticket atualizado</option>
+                        <option value="ticket-status-changed" ${isEdit && rule.trigger === 'ticket-status-changed' ? 'selected' : ''}>Status alterado</option>
+                        <option value="message-received" ${isEdit && rule.trigger === 'message-received' ? 'selected' : ''}>Mensagem recebida</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="automationAction">Ação</label>
+                    <select id="automationAction">
+                        <option value="assign-first-agent" ${isEdit && rule.action === 'assign-first-agent' ? 'selected' : ''}>Atribuir ao primeiro agente</option>
+                        <option value="notify-supervisor" ${isEdit && rule.action === 'notify-supervisor' ? 'selected' : ''}>Notificar supervisor</option>
+                        <option value="set-priority-high" ${isEdit && rule.action === 'set-priority-high' ? 'selected' : ''}>Definir prioridade alta</option>
+                        <option value="add-tag" ${isEdit && rule.action === 'add-tag' ? 'selected' : ''}>Adicionar tag</option>
+                        <option value="send-auto-reply" ${isEdit && rule.action === 'send-auto-reply' ? 'selected' : ''}>Enviar resposta automática</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="automationActive" ${!isEdit || rule.active ? 'checked' : ''}> Regra ativa</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeAutomationModal()">Cancelar</button>
+                <button type="button" class="btn-primary" onclick="saveAutomationFromModal()">${isEdit ? 'Salvar' : 'Criar regra'}</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function closeAutomationModal() {
+    const modal = document.getElementById('automationRuleModal');
+    if (modal) modal.remove();
+}
+
+function saveAutomationFromModal() {
+    const modal = document.getElementById('automationRuleModal');
+    const name = document.getElementById('automationName')?.value.trim();
+    const description = document.getElementById('automationDescription')?.value.trim() || '';
+    const trigger = document.getElementById('automationTrigger')?.value;
+    const action = document.getElementById('automationAction')?.value;
+    const active = document.getElementById('automationActive')?.checked;
+
+    if (!name) {
+        showNotification('Informe o nome da automação!', 'error');
+        return;
+    }
+
+    const rules = getAutomationRules();
+    const editId = modal?.dataset.ruleId;
+
+    if (editId) {
+        const rule = findItemById(rules, editId);
+        if (!rule) {
+            showNotification('Regra não encontrada!', 'error');
+            return;
+        }
+        rule.name = name;
+        rule.description = description;
+        rule.trigger = trigger;
+        rule.action = action;
+        rule.active = active;
+        rule.updatedAt = new Date().toISOString();
+    } else {
+        rules.push({
+            id: Date.now(),
+            name,
+            description,
+            trigger,
+            action,
+            active,
+            createdAt: new Date().toISOString()
+        });
+    }
+
+    localStorage.setItem('automationRules', JSON.stringify(rules));
+    closeAutomationModal();
+    loadAutomationTab();
+    showNotification(editId ? 'Automação atualizada!' : 'Automação criada!', 'success');
+}
+
 function addAutomation() {
-    console.log('Adicionando nova automação...');
-    showNotification('Funcionalidade de automação em desenvolvimento', 'info');
+    openAutomationModal(null);
 }
 
 function editAutomation(automationId) {
-    console.log('Editando automação:', automationId);
-    showNotification('Funcionalidade de edição em desenvolvimento', 'info');
+    const rules = getAutomationRules();
+    const rule = findItemById(rules, automationId);
+    if (!rule) {
+        showNotification('Automação não encontrada!', 'error');
+        return;
+    }
+    openAutomationModal(rule);
+}
+
+function toggleAutomationActive(automationId) {
+    const rules = getAutomationRules();
+    const rule = findItemById(rules, automationId);
+    if (!rule) {
+        showNotification('Automação não encontrada!', 'error');
+        return;
+    }
+    rule.active = !rule.active;
+    localStorage.setItem('automationRules', JSON.stringify(rules));
+    loadAutomationTab();
+    showNotification(`Regra ${rule.active ? 'ativada' : 'desativada'}!`, 'success');
 }
 
 function deleteAutomation(automationId) {
-    if (confirm('Tem certeza que deseja excluir esta automação?')) {
-        console.log('Excluindo automação:', automationId);
-        showNotification('Automação excluída com sucesso!', 'success');
-        loadAutomationTab();
-    }
+    if (!confirm('Tem certeza que deseja excluir esta automação?')) return;
+
+    let rules = getAutomationRules();
+    rules = rules.filter(r => Number(r.id) !== Number(automationId) && String(r.id) !== String(automationId));
+    localStorage.setItem('automationRules', JSON.stringify(rules));
+    loadAutomationTab();
+    showNotification('Automação excluída com sucesso!', 'success');
 }
 
 // Funções para campos

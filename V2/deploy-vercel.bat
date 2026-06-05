@@ -1,0 +1,70 @@
+@echo off
+setlocal EnableExtensions
+
+title Velodesk - Deploy Vercel
+
+set "SOURCE=%~dp0"
+set "DEPLOY=%TEMP%\velodesk-vercel-deploy"
+
+echo.
+echo  Velodesk V2 - Deploy para Vercel
+echo  ================================
+echo.
+
+where npx >nul 2>&1
+if errorlevel 1 (
+    echo [ERRO] Node.js/npx nao encontrado. Instale o Node.js e tente novamente.
+    pause
+    exit /b 1
+)
+
+if not exist "%SOURCE%index.html" (
+    echo [ERRO] index.html nao encontrado em %SOURCE%
+    pause
+    exit /b 1
+)
+
+echo [1/4] Preparando pasta temporaria...
+if exist "%DEPLOY%" rmdir /s /q "%DEPLOY%"
+mkdir "%DEPLOY%"
+
+copy /y "%SOURCE%index.html" "%DEPLOY%\" >nul
+copy /y "%SOURCE%styles.css" "%DEPLOY%\" >nul
+copy /y "%SOURCE%login-simple-fixed.js" "%DEPLOY%\" >nul
+
+if errorlevel 1 (
+    echo [ERRO] Falha ao copiar arquivos do frontend.
+    pause
+    exit /b 1
+)
+
+echo [2/4] Vinculando ao projeto velodesk-v2...
+pushd "%DEPLOY%"
+call npx --yes vercel link --project velodesk-v2 --yes
+if errorlevel 1 (
+    echo.
+    echo [ERRO] Falha ao vincular. Execute "npx vercel login" e tente de novo.
+    popd
+    pause
+    exit /b 1
+)
+
+echo [3/4] Publicando em producao...
+call npx --yes vercel --prod --yes --force
+set "EXITCODE=%ERRORLEVEL%"
+popd
+
+if not "%EXITCODE%"=="0" (
+    echo.
+    echo [ERRO] Deploy falhou. Verifique o login na Vercel e sua conexao.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [4/4] Deploy concluido!
+echo.
+echo  URL: https://velodesk-v2.vercel.app
+echo.
+pause
+exit /b 0

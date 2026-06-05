@@ -1,0 +1,8 @@
+backend/
+README.md
+CHANGELOG.md
+CHANGELOG-V2.0.1.md
+INSTRUCOES_GIT.md
+setup-git.bat
+setup-git.sh
+.gitignore

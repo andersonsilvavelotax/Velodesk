@@ -14540,3 +14540,420 @@ input:checked + .slider:before {
     font-size: 1.1rem;
 }
 
+/* ============================================
+   CONFIGURAÇÕES — visual moderno (V2)
+   ============================================ */
+#config.config-page {
+    --config-bg: #eef1f8;
+    --config-surface: #ffffff;
+    --config-border: rgba(0, 0, 88, 0.08);
+    --config-muted: #64748b;
+    --config-accent: var(--primary-blue);
+    --config-accent-soft: rgba(0, 0, 88, 0.07);
+    --config-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+    --config-radius: 14px;
+}
+
+#config .config-layout {
+    gap: 0;
+    background: var(--config-bg);
+}
+
+#config .config-sidebar {
+    width: 272px;
+    background: linear-gradient(180deg, #0a0a6e 0%, var(--primary-blue) 42%, #12126e 100%);
+    border-right: none;
+    box-shadow: 4px 0 24px rgba(0, 0, 40, 0.12);
+    padding: 0;
+}
+
+#config .config-sidebar-brand {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 1.35rem 1.15rem 1.1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#config .config-sidebar-brand-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+}
+
+#config .config-sidebar-brand h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+#config .config-sidebar-brand p {
+    margin: 0.2rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+#config .config-menu {
+    padding: 0.85rem 0.65rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+#config .config-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.72rem 0.8rem;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    border-left: none;
+    color: rgba(255, 255, 255, 0.82);
+    background: transparent;
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+#config .config-menu-item::before {
+    display: none;
+}
+
+#config .config-menu-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.08);
+    transform: translateX(2px);
+}
+
+#config .config-menu-item.active {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+#config .config-menu-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.95rem;
+}
+
+#config .config-menu-item.active .config-menu-icon {
+    background: #fff;
+    color: var(--primary-blue);
+}
+
+#config .config-menu-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+#config .config-menu-label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+#config .config-menu-desc {
+    font-size: 0.68rem;
+    line-height: 1.3;
+    color: rgba(255, 255, 255, 0.58);
+    font-weight: 400;
+}
+
+#config .config-menu-item.active .config-menu-desc {
+    color: rgba(255, 255, 255, 0.78);
+}
+
+#config .config-content {
+    background:
+        radial-gradient(ellipse 80% 50% at 100% 0%, rgba(51, 51, 170, 0.06), transparent 55%),
+        var(--config-bg);
+    padding: 1.25rem 1.5rem 2rem;
+}
+
+#config .config-content-header {
+    margin-bottom: 1rem;
+    padding: 0.15rem 0 0.25rem;
+}
+
+#config .config-content-eyebrow {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-blue);
+    margin-bottom: 0.35rem;
+}
+
+#config .config-content-header h3 {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--primary-blue);
+    letter-spacing: -0.03em;
+}
+
+#config .config-content-header p {
+    margin: 0.35rem 0 0;
+    font-size: 0.9rem;
+    color: var(--config-muted);
+    max-width: 42rem;
+    line-height: 1.5;
+}
+
+#config .config-welcome-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.85rem;
+}
+
+#config .config-welcome-card {
+    appearance: none;
+    border: 1px solid var(--config-border);
+    background: var(--config-surface);
+    border-radius: var(--config-radius);
+    padding: 1rem 1rem 1.05rem;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: var(--config-shadow);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    color: inherit;
+    font: inherit;
+}
+
+#config .config-welcome-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(0, 0, 88, 0.18);
+    box-shadow: 0 10px 28px rgba(0, 0, 88, 0.1);
+}
+
+#config .config-welcome-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background: var(--config-accent-soft);
+    color: var(--primary-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+}
+
+#config .config-welcome-card strong {
+    font-size: 0.95rem;
+    color: var(--primary-blue);
+}
+
+#config .config-welcome-card span:last-child {
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--config-muted);
+}
+
+#config .config-panel {
+    border: 1px solid var(--config-border);
+    border-radius: calc(var(--config-radius) + 2px);
+    padding: 1.25rem 1.35rem 1.35rem;
+    box-shadow: var(--config-shadow);
+    background: var(--config-surface);
+}
+
+#config .config-panel-hero,
+#config .forms-config-hero {
+    margin: 0 0 1.15rem;
+    padding: 1rem 1.1rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0, 0, 88, 0.04) 0%, rgba(51, 51, 170, 0.07) 100%);
+    border: 1px solid rgba(0, 0, 88, 0.08);
+}
+
+#config .config-panel-hero h4,
+#config .forms-config-title {
+    margin: 0 0 0.4rem;
+    padding: 0;
+    border: none;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--primary-blue);
+}
+
+#config .config-panel-hero p,
+#config .forms-config-subtitle {
+    margin: 0;
+    font-size: 0.86rem;
+    line-height: 1.5;
+    color: var(--config-muted);
+}
+
+#config .config-stats-grid,
+#config .forms-stats-row,
+#config .workflows-stats,
+#config .backup-stats,
+#config .api-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.1rem;
+}
+
+#config .config-stats-grid .stat-card,
+#config .forms-stats-row .stat-card,
+#config .workflows-stats .stat-card,
+#config .backup-stats .stat-card,
+#config .api-stats .stat-card {
+    background: var(--config-surface);
+    border: 1px solid var(--config-border);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    color: var(--primary-blue);
+    box-shadow: none;
+    gap: 0.75rem;
+}
+
+#config .config-stats-grid .stat-card:hover,
+#config .forms-stats-row .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 88, 0.08);
+    border-color: rgba(0, 0, 88, 0.14);
+}
+
+#config .config-stats-grid .stat-icon,
+#config .forms-stats-row .stat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    background: var(--config-accent-soft);
+    color: var(--primary-blue);
+    font-size: 1rem;
+}
+
+#config .config-stats-grid .stat-info h3,
+#config .forms-stats-row .stat-info h3 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--primary-blue);
+}
+
+#config .config-stats-grid .stat-info p,
+#config .forms-stats-row .stat-info p {
+    font-size: 0.74rem;
+    color: var(--config-muted);
+    opacity: 1;
+}
+
+#config .config-action-bar,
+#config .forms-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem 0.85rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px dashed rgba(0, 0, 88, 0.12);
+}
+
+#config .config-list-panel,
+#config .forms-list-panel {
+    background: #f8fafc;
+    border: 1px solid var(--config-border);
+    border-radius: 12px;
+    padding: 0.75rem;
+    min-height: 140px;
+}
+
+#config .config-subsection {
+    margin-top: 1.25rem;
+}
+
+#config .config-subsection h5 {
+    margin: 0 0 0.65rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--primary-blue);
+}
+
+#config .config-tab-content.active {
+    animation: configTabIn 0.28s ease;
+}
+
+@keyframes configTabIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#config .config-section h4 {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+@media (max-width: 900px) {
+    #config .config-layout {
+        flex-direction: column;
+    }
+
+    #config .config-sidebar {
+        width: 100%;
+        max-height: none;
+    }
+
+    #config .config-menu {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 0.65rem;
+    }
+
+    #config .config-menu-item {
+        min-width: 200px;
+        flex-shrink: 0;
+    }
+
+    #config .config-menu-desc {
+        display: none;
+    }
+
+    #config .config-content {
+        padding: 1rem;
+    }
+
+    #config .config-welcome-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 520px) {
+    #config .config-welcome-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
