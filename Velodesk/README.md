@@ -1,6 +1,6 @@
-# Velodesk - Sistema de Gerenciamento de Tickets
+# Projeto Velodesk
 
-Sistema completo de helpdesk com frontend responsivo e backend robusto.
+Sistema completo de helpdesk com frontend responsivo, backend e protótipo V3 em `prototipo/`.
 
 ## 🚀 Funcionalidades Implementadas
 
