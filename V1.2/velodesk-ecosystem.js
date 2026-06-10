@@ -277,7 +277,6 @@
                     <div><span class="ws-eyebrow">Workspace do Agente</span><h3>Painel 360°</h3><p>Tickets, monitoria, treinamentos e metas — tudo fluindo em uma única tela.</p></div>
                     <div class="ws-hero-actions">
                         <button class="btn-primary" onclick="openQuickRegisterModal()"><i class="fas fa-bolt"></i> Registro rápido</button>
-                        <button class="btn-secondary" onclick="toggleCallAssist()"><i class="fas fa-wand-magic-sparkles"></i> IA na ligação</button>
                     </div>
                 </div>
                 <div class="ws-stats-grid">
@@ -805,20 +804,33 @@
         document.body.appendChild(panel);
     }
 
+    function syncChromeTopOffset() {
+        const banner = document.querySelector('.eco-prototype-banner');
+        const h = banner ? banner.offsetHeight : 0;
+        document.body.style.setProperty('--velo-banner-height', h + 'px');
+    }
+
     function injectPrototypeBanner() {
-        if (document.getElementById('ecoPrototypeBanner')) return;
+        if (document.getElementById('ecoPrototypeBanner')) {
+            syncChromeTopOffset();
+            return;
+        }
         const banner = document.createElement('div');
         banner.id = 'ecoPrototypeBanner';
         banner.className = 'eco-prototype-banner';
-        banner.innerHTML = `<i class="fas fa-flask"></i> Protótipo V3 — Ecossistema Velodesk (local) · <button type="button" onclick="this.parentElement.remove()">ocultar</button>`;
+        banner.innerHTML = `<i class="fas fa-flask"></i> Protótipo V3 — Ecossistema Velodesk (local) · <button type="button" onclick="this.parentElement.remove(); if(window.syncChromeTopOffset) window.syncChromeTopOffset();">ocultar</button>`;
         document.body.appendChild(banner);
+        syncChromeTopOffset();
     }
+    window.syncChromeTopOffset = syncChromeTopOffset;
 
     /* ─── Init & hooks ─── */
     window.initVelodeskEcosystem = function () {
         seedEcosystemData();
+        if (typeof window.seedDemoTickets === 'function') {
+            window.seedDemoTickets({ force: true, replaceAll: true });
+        }
         injectPrototypeBanner();
-        injectCallAssistPanel();
         initGlobalAIReview();
         applyProfileUI();
         renderWorkspace360();

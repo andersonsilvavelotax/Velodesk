@@ -58,25 +58,22 @@ function navigateToPage(page) {
     } else if (page === 'dashboard') {
         loadDashboardStats();
     } else if (page === 'tickets') {
-        // Garantir que a página de tickets seja restaurada corretamente
-        const ticketsPage = document.getElementById('tickets');
-        if (ticketsPage) {
-            ticketsPage.classList.remove('ticket-tab-open');
+        const mainContentTickets = document.querySelector('.main-content');
+        if (mainContentTickets) {
+            mainContentTickets.style.background = 'transparent';
+            mainContentTickets.classList.add('tickets-active');
         }
-        
-        // Garantir que o background seja transparente
-        const mainContent = document.querySelector('.main-content');
-        if (mainContent) {
-            mainContent.style.background = 'transparent';
-            mainContent.classList.add('tickets-active');
-        }
-        
+
         loadBoxes();
         const kanbanColumns = localStorage.getItem('kanbanColumns');
         if (!kanbanColumns || JSON.parse(kanbanColumns).length === 0) {
             forceCreateKanbanBoxes();
         } else {
             loadBoxes();
+        }
+
+        if (typeof restoreTicketsPageView === 'function') {
+            restoreTicketsPageView();
         }
     } else if (page === 'config') {
         loadConfig();
@@ -109,6 +106,10 @@ function navigateToPage(page) {
             mainContent.classList.remove('tickets-active');
             mainContent.style.background = 'var(--light-gray)';
         }
+    }
+
+    if (typeof updateTicketsTabsChrome === 'function') {
+        updateTicketsTabsChrome();
     }
 }
 
@@ -467,21 +468,32 @@ function toggleFiltersPanel() {
 // Função para abrir ticket
 // Variável para armazenar abas abertas
 const openTicketTabs = new Map();
+let lastActiveTicketsTab = 'list';
+
+window.openTicketTabs = openTicketTabs;
 
 function openTicket(ticketId) {
-    // Verificar se já existe uma aba aberta para este ticket
-    if (openTicketTabs.has(ticketId)) {
-        switchTicketTab(`ticket-${ticketId}`);
+    const ticketsPage = document.getElementById('tickets');
+    if (ticketsPage && !ticketsPage.classList.contains('active')) {
+        navigateToPage('tickets');
+    }
+
+    const numericId = parseInt(ticketId, 10);
+    const existingKey = openTicketTabs.has(ticketId) ? ticketId
+        : (openTicketTabs.has(numericId) ? numericId : null);
+
+    if (existingKey != null) {
+        switchTicketTab(openTicketTabs.get(existingKey).tabId);
         return;
     }
-    
+
     const kanbanColumns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
     let foundTicket = null;
     let foundBox = null;
-    
+
     for (const box of kanbanColumns) {
         if (box.tickets) {
-            const ticket = box.tickets.find(t => t.id === ticketId);
+            const ticket = box.tickets.find(t => t.id == ticketId);
             if (ticket) {
                 foundTicket = ticket;
                 foundBox = box;
@@ -489,15 +501,17 @@ function openTicket(ticketId) {
             }
         }
     }
-    
+
     if (!foundTicket) {
         console.error('Ticket não encontrado!');
         showNotification('Ticket não encontrado!', 'error');
         return;
     }
-    
+
     createTicketTab(foundTicket, foundBox);
 }
+
+window.openTicket = openTicket;
 
 // Função para criar modal de ticket
 function createTicketModal(ticket, box) {
@@ -580,6 +594,84 @@ function createNewTicket() {
 
 // Função duplicada removida - já existe acima
 
+function ensureListTab() {
+    const tabsBar = document.getElementById('ticketTabsBar');
+    if (!tabsBar || document.querySelector('.ticket-tab-item[data-tab="list"]')) return;
+
+    const listTab = document.createElement('div');
+    listTab.className = 'ticket-tab-item';
+    listTab.setAttribute('data-tab', 'list');
+    listTab.onclick = () => switchTicketTab('list');
+    listTab.innerHTML = `
+        <i class="fas fa-th-list"></i>
+        <span>Lista</span>
+    `;
+    tabsBar.insertBefore(listTab, tabsBar.firstChild);
+}
+
+function syncTicketTabsBarHeight() {
+    const tabsBar = document.getElementById('ticketTabsBar');
+    const onTickets = document.getElementById('tickets')?.classList.contains('active');
+    const visible = tabsBar && tabsBar.style.display !== 'none' && onTickets;
+    const height = visible ? tabsBar.offsetHeight : 0;
+    document.body.style.setProperty('--velo-ticket-tabs-height', height ? height + 'px' : '0px');
+}
+
+function updateTicketsTabsChrome() {
+    const ticketsPage = document.getElementById('tickets');
+    const tabsBar = document.getElementById('ticketTabsBar');
+    const hasOpen = openTicketTabs.size > 0;
+    const onTicketsPage = ticketsPage?.classList.contains('active');
+    const showBar = hasOpen && onTicketsPage;
+
+    if (ticketsPage) {
+        ticketsPage.classList.toggle('has-open-ticket-tabs', hasOpen);
+    }
+    if (tabsBar) {
+        tabsBar.style.display = showBar ? 'flex' : 'none';
+        tabsBar.setAttribute('aria-hidden', showBar ? 'false' : 'true');
+    }
+    document.body.classList.toggle('has-ticket-tabs-visible', showBar);
+
+    if (!hasOpen) {
+        document.querySelector('.ticket-tab-item[data-tab="list"]')?.remove();
+    }
+
+    requestAnimationFrame(syncTicketTabsBarHeight);
+}
+
+function restoreTicketsPageView() {
+    const ticketsLayout = document.getElementById('ticketsLayout');
+    const tabsContent = document.querySelector('.ticket-tabs-content');
+
+    updateTicketsTabsChrome();
+
+    if (openTicketTabs.size === 0) {
+        if (tabsContent) tabsContent.style.display = 'none';
+        if (ticketsLayout) ticketsLayout.style.display = 'flex';
+        document.getElementById('tickets')?.classList.remove('ticket-tab-open');
+        lastActiveTicketsTab = 'list';
+        updateSidebarToggleVisibility();
+        return;
+    }
+
+    ensureListTab();
+
+    let tabToShow = lastActiveTicketsTab;
+    if (tabToShow !== 'list') {
+        const rawId = tabToShow.replace('ticket-', '');
+        const numericId = parseInt(rawId, 10);
+        const stillOpen = openTicketTabs.has(numericId) || openTicketTabs.has(rawId);
+        const contentExists = document.getElementById(`tab-${tabToShow}`);
+        if (!stillOpen || !contentExists) {
+            const remaining = [...openTicketTabs.values()];
+            tabToShow = remaining.length ? remaining[remaining.length - 1].tabId : 'list';
+        }
+    }
+
+    switchTicketTab(tabToShow);
+}
+
 // Função para criar aba de ticket
 function createTicketTab(ticket, box) {
     const tabId = `ticket-${ticket.id}`;
@@ -594,15 +686,11 @@ function createTicketTab(ticket, box) {
     // Criar aba na barra de abas
     const tabsBar = document.getElementById('ticketTabsBar');
     const tabsContent = document.querySelector('.ticket-tabs-content');
-    const ticketsLayout = document.getElementById('ticketsLayout');
-    
+
     if (!tabsBar || !tabsContent) return;
-    
-    // Mostrar barra de abas e conteúdo, ocultar layout de lista
-    tabsBar.style.display = 'flex';
-    tabsContent.style.display = 'flex';
-    tabsContent.style.flexDirection = 'column';
-    if (ticketsLayout) ticketsLayout.style.display = 'none';
+
+    ensureListTab();
+    updateTicketsTabsChrome();
     
     const tabItem = document.createElement('div');
     tabItem.className = 'ticket-tab-item';
@@ -652,20 +740,12 @@ function createTicketTab(ticket, box) {
     
     // Armazenar referência
     openTicketTabs.set(ticket.id, { tabId, ticket, box });
-    
-    // Garantir que a classe está aplicada antes de ativar a aba
-    const ticketsPage = document.getElementById('tickets');
-    if (ticketsPage) {
-        ticketsPage.classList.add('ticket-tab-open');
-    }
-    
-    // Mostrar botão de toggle do sidebar quando ticket for aberto
+
     updateSidebarToggleVisibility();
-    
-    // Pequeno delay para garantir que o DOM está pronto antes da animação
+
     setTimeout(() => {
-        // Ativar a nova aba com animação suave
         switchTicketTab(tabId);
+        requestAnimationFrame(syncTicketTabsBarHeight);
     }, 50);
     
     // Configurar event listeners após criação
@@ -771,72 +851,15 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                     </div>
                 </div>
 
-                <!-- Coluna Lateral - Informações do Cliente e Formulário -->
-                <div class="ticket-tab-sidebar">
-                    <!-- Seção de Informações do Cliente -->
-                    <div class="sidebar-section client-info-section">
-                        <h3>Informações do Cliente</h3>
-                        <div class="client-fields">
-                            <div class="form-field">
-                                <label>Solicitante/Cliente</label>
-                                <input type="text" class="form-input" id="solicitante-${ticket.id}" placeholder="Nome do solicitante/cliente" value="${ticket.solicitante || ticket.clientName || ''}">
-                            </div>
-                            <div class="form-field">
-                                <label>Responsável</label>
-                                <select class="form-input" id="responsibleAgent-${ticket.id}" onchange="updateTicketResponsible(${ticket.id}, this.value)">
-                                    <option value="">Selecione um responsável</option>
-                                    ${generateUsersOptions(ticket.responsibleAgent)}
-                                </select>
-                            </div>
-                            <div class="form-field">
-                                <label>CPF</label>
-                                <input type="text" class="form-input" id="clientCPF-${ticket.id}" placeholder="000.000.000-00" value="${ticket.clientCPF || ''}">
-                            </div>
-                            <div class="form-field">
-                                <label>Nome do Cliente</label>
-                                <input type="text" class="form-input" id="clientName-${ticket.id}" placeholder="Nome completo do cliente" value="${ticket.clientName || ''}">
-                            </div>
-                            <div class="client-actions">
-                                <button class="btn-primary btn-save-client" onclick="saveClientData(${ticket.id})">
-                                    <i class="fas fa-save"></i> Salvar Dados
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Seção de Seleção de Formulário -->
-                    <div class="sidebar-section form-selector-section">
-                        <h3>Formulário Personalizado</h3>
-                        <div class="form-selector">
-                            <div class="form-field">
-                                <label>Selecionar Formulário:</label>
-                                <select id="formSelector-${ticket.id}" onchange="applyFormToTicket(${ticket.id}, this.value)">
-                                    <option value="">Selecione um formulário...</option>
-                                    ${generateFormOptions(ticket.formId)}
-                                </select>
-                            </div>
-                            <div class="form-actions">
-                                <button class="btn-secondary btn-refresh-forms" onclick="refreshFormSelector(${ticket.id})">
-                                    <i class="fas fa-sync"></i> Atualizar Lista
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Seção do Formulário Aplicado -->
-                    <div class="sidebar-section form-section">
-                        <h3>Campos do Formulário</h3>
-                        <div class="form-fields" id="ticketFormFields-${ticket.id}">
-                            ${ticket.formId ? renderTicketFormFieldsSimple(ticket) : '<p class="no-form-message">Selecione um formulário acima para ver os campos.</p>'}
-                        </div>
-                    </div>
+                <!-- Coluna Lateral — Formulário fixo do ticket -->
+                <div class="ticket-tab-sidebar velo-lateral-form-sidebar">
+                    ${typeof renderTicketLateralFormHTML === 'function' ? renderTicketLateralFormHTML(ticket) : ''}
                 </div>
             </div>
             
             <!-- Rodapé Fixo -->
             <div class="ticket-tab-footer-fixed">
                 <div class="ticket-tab-footer-left">
-                    <!-- Espaço vazio para alinhar com o conteúdo principal -->
                 </div>
                 <div class="ticket-tab-footer-right">
                     <div class="dropdown-container">
@@ -890,99 +913,98 @@ function updateSidebarToggleVisibility() {
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         updateSidebarToggleVisibility();
+        const ticketsPage = document.getElementById('tickets');
+        if (ticketsPage?.classList.contains('active') && typeof restoreTicketsPageView === 'function') {
+            restoreTicketsPageView();
+        }
     }, 500);
 });
 
 // Função para alternar entre abas
 function switchTicketTab(tabId) {
-    // Remover active de todas as abas com transição suave
+    if (!tabId) tabId = 'list';
+    lastActiveTicketsTab = tabId;
+
+    const ticketsPage = document.getElementById('tickets');
+    const ticketsLayout = document.getElementById('ticketsLayout');
+    const tabsContent = document.querySelector('.ticket-tabs-content');
+
     document.querySelectorAll('.ticket-tab-item').forEach(tab => {
-        tab.classList.remove('active');
+        tab.classList.toggle('active', tab.getAttribute('data-tab') === tabId);
     });
-    
+
     document.querySelectorAll('.ticket-tab-content').forEach(content => {
         content.classList.remove('active');
-        // Resetar animação
-        content.style.animation = 'none';
-        setTimeout(() => {
-            content.style.animation = '';
-        }, 10);
     });
-    
-    // Pequeno delay para transição suave
-    setTimeout(() => {
-        // Ativar aba selecionada
-        const tabItem = document.querySelector(`.ticket-tab-item[data-tab="${tabId}"]`);
+
+    const tabItem = document.querySelector(`.ticket-tab-item[data-tab="${tabId}"]`);
+    if (tabItem) {
+        tabItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
+    if (tabId === 'list') {
+        if (ticketsLayout) ticketsLayout.style.display = 'flex';
+        if (tabsContent) tabsContent.style.display = 'none';
+        ticketsPage?.classList.remove('ticket-tab-open');
+    } else {
+        if (ticketsLayout) ticketsLayout.style.display = 'none';
+        if (tabsContent) {
+            tabsContent.style.display = 'flex';
+            tabsContent.style.flexDirection = 'column';
+        }
+        ticketsPage?.classList.add('ticket-tab-open');
+
         const tabContent = document.getElementById(`tab-${tabId}`);
-        
-        if (tabItem) tabItem.classList.add('active');
         if (tabContent) tabContent.classList.add('active');
-        
-        // Scroll para a aba ativa na barra de abas
-        if (tabItem) {
-            tabItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-        
-        // Adicionar ou remover classe para ocultar elementos quando um ticket estiver aberto
-        const ticketsPage = document.getElementById('tickets');
-        if (ticketsPage) {
-            // Verificar se há uma aba de ticket ativa (não apenas "Lista")
-            const hasTicketTabOpen = tabId && tabId.startsWith('ticket-');
-            if (hasTicketTabOpen) {
-                ticketsPage.classList.add('ticket-tab-open');
-            } else {
-                ticketsPage.classList.remove('ticket-tab-open');
-            }
-        }
-    }, 10);
+    }
+
+    updateSidebarToggleVisibility();
 }
+
+window.switchTicketTab = switchTicketTab;
+window.restoreTicketsPageView = restoreTicketsPageView;
 
 // Função para fechar aba
 function closeTicketTab(tabId) {
-    // Não permitir fechar a aba "Lista"
     if (tabId === 'list') return;
-    
+
+    const wasActive = !!document.querySelector(`.ticket-tab-item.active[data-tab="${tabId}"]`);
+
     const tabItem = document.querySelector(`.ticket-tab-item[data-tab="${tabId}"]`);
     const tabContent = document.getElementById(`tab-${tabId}`);
-    
+
     if (tabItem) tabItem.remove();
     if (tabContent) tabContent.remove();
-    
-    // Remover da lista de abas abertas
-    const ticketId = parseInt(tabId.replace('ticket-', ''));
-    if (openTicketTabs.has(ticketId)) {
-        openTicketTabs.delete(ticketId);
-    }
-    
-    // Ativar aba "Lista" se ainda existir
-    const listTab = document.querySelector('.ticket-tab-item[data-tab="list"]');
-    if (listTab) {
-        switchTicketTab('list');
-        // Remover classe quando voltar para lista
-        const ticketsPage = document.getElementById('tickets');
-        if (ticketsPage) {
-            ticketsPage.classList.remove('ticket-tab-open');
-        }
-    } else {
-        // Se não houver mais abas, ocultar barra de abas e mostrar layout de lista
-        const tabsBar = document.getElementById('ticketTabsBar');
+
+    const rawId = tabId.replace('ticket-', '');
+    const numericId = parseInt(rawId, 10);
+    if (openTicketTabs.has(numericId)) openTicketTabs.delete(numericId);
+    else if (openTicketTabs.has(rawId)) openTicketTabs.delete(rawId);
+
+    updateTicketsTabsChrome();
+
+    if (openTicketTabs.size === 0) {
+        document.querySelector('.ticket-tab-item[data-tab="list"]')?.remove();
         const tabsContent = document.querySelector('.ticket-tabs-content');
         const ticketsLayout = document.getElementById('ticketsLayout');
-        
-        if (tabsBar) tabsBar.style.display = 'none';
+        const ticketsPage = document.getElementById('tickets');
+
         if (tabsContent) tabsContent.style.display = 'none';
         if (ticketsLayout) ticketsLayout.style.display = 'flex';
-        
-        // Remover classe quando só há aba Lista
-        const ticketsPage = document.getElementById('tickets');
         if (ticketsPage) {
-            ticketsPage.classList.remove('ticket-tab-open');
+            ticketsPage.classList.remove('ticket-tab-open', 'has-open-ticket-tabs');
         }
+        lastActiveTicketsTab = 'list';
+    } else if (wasActive) {
+        const remaining = [...openTicketTabs.values()];
+        const nextTab = remaining[remaining.length - 1]?.tabId || 'list';
+        switchTicketTab(nextTab);
     }
-    
-    // Atualizar visibilidade do botão de toggle após fechar ticket
+
     updateSidebarToggleVisibility();
 }
+
+window.closeTicketTab = closeTicketTab;
 
 // Função para alternar aba de resposta dentro do ticket
 function switchResponseTabInTab(ticketId, tabType) {
@@ -1490,65 +1512,9 @@ function createTicketModal(ticket, box) {
                         </div>
                     </div>
 
-                    <!-- Coluna Lateral - Informações do Cliente e Formulário -->
-                    <div class="ticket-sidebar">
-                        <!-- Seção de Informações do Cliente -->
-                        <div class="sidebar-section client-info-section">
-                            <h3>Informações do Cliente</h3>
-                            <div class="client-fields">
-                                <div class="form-field">
-                                    <label>Solicitante/Cliente</label>
-                                    <input type="text" class="form-input" id="solicitante" placeholder="Nome do solicitante/cliente" value="${ticket.solicitante || ticket.clientName || ''}">
-                                </div>
-                                <div class="form-field">
-                                    <label>Responsável</label>
-                                    <select class="form-input" id="responsibleAgent" onchange="updateTicketResponsible(${ticket.id}, this.value)">
-                                        <option value="">Selecione um responsável</option>
-                                        ${generateUsersOptions(ticket.responsibleAgent)}
-                                    </select>
-                                </div>
-                                <div class="form-field">
-                                    <label>CPF</label>
-                                    <input type="text" class="form-input" id="clientCPF" placeholder="000.000.000-00" value="${ticket.clientCPF || ''}">
-                                </div>
-                                <div class="form-field">
-                                    <label>Nome do Cliente</label>
-                                    <input type="text" class="form-input" id="clientName" placeholder="Nome completo do cliente" value="${ticket.clientName || ''}">
-                                </div>
-                                <div class="client-actions">
-                                    <button class="btn-primary btn-save-client" onclick="saveClientData(${ticket.id})">
-                                        <i class="fas fa-save"></i> Salvar Dados
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Seção de Seleção de Formulário -->
-                        <div class="sidebar-section form-selector-section">
-                            <h3>Formulário Personalizado</h3>
-                            <div class="form-selector">
-                                <div class="form-field">
-                                    <label>Selecionar Formulário:</label>
-                                    <select id="formSelector" onchange="applyFormToTicket(${ticket.id}, this.value)">
-                                        <option value="">Selecione um formulário...</option>
-                                        ${generateFormOptions(ticket.formId)}
-                                    </select>
-                                </div>
-                                <div class="form-actions">
-                                    <button class="btn-secondary btn-refresh-forms" onclick="refreshFormSelector(${ticket.id})">
-                                        <i class="fas fa-sync"></i> Atualizar Lista
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Seção do Formulário Aplicado -->
-                        <div class="sidebar-section form-section">
-                            <h3>Campos do Formulário</h3>
-                            <div class="form-fields" id="ticketFormFields">
-                                ${ticket.formId ? renderTicketFormFieldsSimple(ticket) : '<p class="no-form-message">Selecione um formulário acima para ver os campos.</p>'}
-                            </div>
-                        </div>
+                    <!-- Coluna Lateral — Formulário fixo do ticket -->
+                    <div class="ticket-sidebar velo-lateral-form-sidebar">
+                        ${typeof renderTicketLateralFormHTML === 'function' ? renderTicketLateralFormHTML(ticket) : ''}
                     </div>
                 </div>
             </div>
@@ -5018,7 +4984,8 @@ const CONFIG_TAB_PANEL_IDS = {
     workflows: 'workflowsTab',
     backup: 'backupTab',
     api: 'apiTab',
-    automation: 'configAutomationTab'
+    automation: 'configAutomationTab',
+    'lateral-form': 'lateralFormTab'
 };
 
 function updateConfigContentHeader(title, desc) {
@@ -5353,7 +5320,12 @@ function switchConfigTab(tabName) {
         workflows: loadWorkflowsTab,
         backup: loadBackupTab,
         api: loadApiTab,
-        automation: loadAutomationTab
+        automation: loadAutomationTab,
+        'lateral-form': function () {
+            if (typeof renderLateralFormConfigPanel === 'function') {
+                renderLateralFormConfigPanel();
+            }
+        }
     };
     const loader = tabLoaders[tabName];
     if (typeof loader === 'function') loader();

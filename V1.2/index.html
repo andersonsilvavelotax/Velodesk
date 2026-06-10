@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=5">
-    <link rel="stylesheet" href="velodesk-ecosystem.css?v=2">
+    <link rel="stylesheet" href="styles.css?v=14">
+    <link rel="stylesheet" href="velodesk-ecosystem.css?v=4">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -64,9 +64,6 @@
                         <button type="button" class="btn-eco-ghost" onclick="openClient360('cliente-demo')" title="Histórico 360° do cliente">
                             <i class="fas fa-user-circle"></i> <span>Cliente 360°</span>
                         </button>
-                        <button type="button" class="btn-eco-call" onclick="toggleCallAssist()" title="Atendimento IA na ligação">
-                            <i class="fas fa-wand-magic-sparkles"></i> <span>IA Ligação</span>
-                        </button>
                     </div>
                     <div class="notification-bell" onclick="toggleNotificationPanel()">
                         <i class="fas fa-bell"></i>
@@ -79,6 +76,9 @@
                 </div>
             </div>
         </header>
+
+        <!-- Guias de tickets abertos (fixo logo abaixo do header) -->
+        <div class="ticket-tabs-bar" id="ticketTabsBar" style="display: none;" aria-hidden="true"></div>
 
         <!-- Sidebar -->
         <nav class="sidebar" id="mainSidebar">
@@ -230,11 +230,6 @@
 
             <!-- Tickets -->
             <div id="tickets" class="page">
-                <!-- Barra de Abas de Tickets -->
-                <div class="ticket-tabs-bar" id="ticketTabsBar" style="display: none;">
-                    <!-- Abas serão adicionadas aqui dinamicamente -->
-                </div>
-                
                 <!-- Conteúdo das Abas de Tickets -->
                 <div class="ticket-tabs-content" style="display: none;">
                     <!-- Conteúdo das abas será adicionado aqui dinamicamente -->
@@ -934,6 +929,13 @@
                         </div>
                         <nav>
                             <ul class="config-menu">
+                                <li class="config-menu-item" data-config-tab="lateral-form" data-config-title="Formulário do ticket" data-config-desc="Campos fixos preenchidos em cada ticket">
+                                    <span class="config-menu-icon"><i class="fas fa-ticket-alt"></i></span>
+                                    <span class="config-menu-text">
+                                        <span class="config-menu-label">Formulário do ticket</span>
+                                        <span class="config-menu-desc">CPF, canal, produto, motivo…</span>
+                                    </span>
+                                </li>
                                 <li class="config-menu-item" data-config-tab="forms" data-config-title="Formulários" data-config-desc="Modelos e campos para atendimento">
                                     <span class="config-menu-icon"><i class="fas fa-wpforms"></i></span>
                                     <span class="config-menu-text">
@@ -982,6 +984,11 @@
                         </header>
                         <div id="configTabPlaceholder" class="config-tab-content config-tab-placeholder active">
                             <div class="config-welcome-grid">
+                                <button type="button" class="config-welcome-card" data-config-tab="lateral-form">
+                                    <span class="config-welcome-card-icon"><i class="fas fa-ticket-alt"></i></span>
+                                    <strong>Formulário do ticket</strong>
+                                    <span>Campos fixos salvos em cada ticket</span>
+                                </button>
                                 <button type="button" class="config-welcome-card" data-config-tab="forms">
                                     <span class="config-welcome-card-icon"><i class="fas fa-wpforms"></i></span>
                                     <strong>Formulários</strong>
@@ -1007,6 +1014,18 @@
                                     <strong>Automações</strong>
                                     <span>Regras que executam sozinhas</span>
                                 </button>
+                            </div>
+                        </div>
+                        <!-- Aba Formulário lateral (protótipo V3) -->
+                        <div id="lateralFormTab" class="config-tab-content">
+                            <div class="config-section config-panel velo-lf-config-section">
+                                <header class="config-panel-hero">
+                                    <div>
+                                        <h4 class="forms-config-title">Formulário do ticket</h4>
+                                        <p class="forms-config-subtitle">Edite classificações, produtos, motivos e detalhes em texto simples — uma linha por item, sem JSON.</p>
+                                    </div>
+                                </header>
+                                <div id="lateralFormConfigRoot"></div>
                             </div>
                         </div>
                         <!-- Aba Formulários -->
@@ -1418,7 +1437,9 @@
     
     <!-- Scripts -->
     <script src="login-simple-fixed.js"></script>
-    <script src="velodesk-ecosystem.js?v=2"></script>
+    <script src="seed-demo-tickets.js?v=2"></script>
+    <script src="ticket-lateral-form.js?v=7"></script>
+    <script src="velodesk-ecosystem.js?v=5"></script>
     
 </body>
 </html>
