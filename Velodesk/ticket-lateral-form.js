@@ -53,14 +53,23 @@
     };
 
     const FIELD_META = {
-        cpf: { label: 'CPF', rule: 'db', hint: 'Integração DB — carrega produtos, situação e jornada' },
-        canal: { label: 'Canal', rule: 'auto', hint: 'Percepção automática do canal de origem' },
-        classificacaoTipo: { label: 'Classificação de tipo', rule: 'manual', hint: 'Preenchimento manual pelo agente' },
-        produto: { label: 'Produto', rule: 'attendance', hint: 'Produto do atendimento atual' },
-        motivo: { label: 'Motivo', rule: 'dynamic-product', hint: 'Opções restritas ao produto selecionado' },
-        detalhe: { label: 'Detalhe', rule: 'dynamic-motivo', hint: 'Opções restritas ao motivo selecionado' },
-        responsavel: { label: 'Responsável', rule: 'journey-agent', hint: 'Agente responsável pela jornada do ticket' },
-        atribuido: { label: 'Atribuído', rule: 'phase', hint: 'Pessoa/fila da fase atual do ticket' }
+        cpf: { label: 'CPF', rule: 'db' },
+        canal: { label: 'Canal', rule: 'auto' },
+        classificacaoTipo: { label: 'Classificação de tipo', rule: 'manual' },
+        produto: { label: 'Produto', rule: 'attendance' },
+        motivo: { label: 'Motivo', rule: 'dynamic-product' },
+        detalhe: { label: 'Detalhe', rule: 'dynamic-motivo' },
+        responsavel: { label: 'Responsável', rule: 'journey-agent' },
+        atribuido: { label: 'Atribuído', rule: 'phase' }
+    };
+
+    const PRODUCT_TAG_CLASS = {
+        'Móvel': 'velo-tag--mobile',
+        'Combo': 'velo-tag--combo',
+        'Internet Fibra': 'velo-tag--fiber',
+        'TV': 'velo-tag--tv',
+        'Telefone Fixo': 'velo-tag--landline',
+        'Streaming': 'velo-tag--streaming'
     };
 
     const FIELD_ORDER = ['cpf', 'canal', 'classificacaoTipo', 'produto', 'motivo', 'detalhe', 'responsavel', 'atribuido'];
@@ -372,45 +381,156 @@
         return html;
     }
 
-    function renderThermometer(client) {
-        if (!client) return '';
+    function renderProductTags(produtos) {
+        return (produtos || []).map(function (p) {
+            const cls = PRODUCT_TAG_CLASS[p] || 'velo-tag--default';
+            return '<span class="velo-product-tag ' + cls + '">' + escapeHtml(p) + '</span>';
+        }).join('');
+    }
+
+    function renderHistoryItems(atendimentos) {
+        return (atendimentos || []).slice(0, 4).map(function (a) {
+            const searchKey = (a.data + ' ' + a.canal + ' ' + a.assunto + ' ' + a.status).toLowerCase();
+            return '<li class="velo-hist-row velo-lf-history-item" data-search="' + escapeHtml(searchKey) + '">' +
+                '<span class="velo-hist-row__title">' + escapeHtml(a.assunto) + '</span>' +
+                '<span class="velo-hist-row__meta">' + escapeHtml(a.data) + ' · ' + escapeHtml(a.canal) + ' · ' + escapeHtml(a.status) + '</span></li>';
+        }).join('');
+    }
+
+    function getThermoVisualMeta(client) {
         const score = Math.min(100, Math.max(0, client.termometro != null ? client.termometro : 50));
         const nivel = client.termometroNivel || (score >= 80 ? 'quente' : score >= 55 ? 'morno' : 'frio');
         const label = client.termometroLabel || (score >= 80 ? 'Crítico' : score >= 55 ? 'Atenção' : 'Estável');
-        const desc = client.breveDescricao || client.analise || '';
-        return '<div class="velo-lf-thermo velo-lf-thermo--' + escapeHtml(nivel) + '">' +
-            '<div class="velo-lf-thermo-head">' +
-            '<span><i class="fas fa-thermometer-half"></i> Termômetro do cliente</span>' +
-            '<strong>' + score + '° · ' + escapeHtml(label) + '</strong></div>' +
-            '<div class="velo-lf-thermo-track" role="meter" aria-valuenow="' + score + '" aria-valuemin="0" aria-valuemax="100">' +
-            '<div class="velo-lf-thermo-fill" style="width:' + score + '%"></div></div>' +
-            '<div class="velo-lf-thermo-scale"><span>Frio</span><span>Morno</span><span>Quente</span></div>' +
-            (desc ? '<p class="velo-lf-thermo-desc">' + escapeHtml(desc) + '</p>' : '') +
-            '</div>';
+        const map = {
+            frio: {
+                icon: 'fa-snowflake',
+                badge: label,
+                color: '#059669',
+                bg: '#ecfdf5',
+                border: '#a7f3d0',
+                zoneClass: 'velo-thermo-zone--frio',
+                action: 'Cliente estável — priorize resolução técnica com SLA curto.'
+            },
+            morno: {
+                icon: 'fa-temperature-half',
+                badge: label,
+                color: '#d97706',
+                bg: '#fffbeb',
+                border: '#fde68a',
+                zoneClass: 'velo-thermo-zone--morno',
+                action: 'Atenção — alinhe expectativas, confirme prazos e evite transferências.'
+            },
+            quente: {
+                icon: 'fa-fire',
+                badge: label,
+                color: '#dc2626',
+                bg: '#fef2f2',
+                border: '#fecaca',
+                zoneClass: 'velo-thermo-zone--quente',
+                action: 'Prioridade alta — considere retenção, escalonamento ou supervisor.'
+            }
+        };
+        return Object.assign({ score: score, nivel: nivel }, map[nivel] || map.morno);
+    }
+
+    function pickClientNextStep(client, meta) {
+        const desc = (client.breveDescricao || '').trim();
+        if (desc) {
+            const tail = desc.split(/[—–]/).pop().trim().replace(/\.$/, '');
+            if (tail.length >= 8) return tail;
+            const first = desc.split(/[.;]/)[0].trim();
+            if (first.length >= 8) return first;
+        }
+        if (client.analise) {
+            return client.analise
+                .replace(/^Termômetro\s+[^:]+:\s*/i, '')
+                .replace(/^Perfil\s+[^:]+:\s*/i, '')
+                .split(/[.;]/)[0]
+                .trim();
+        }
+        return meta.action;
+    }
+
+    function renderClientSummary(client) {
+        const meta = getThermoVisualMeta(client);
+        const step = pickClientNextStep(client, meta);
+        return '<div class="velo-brief velo-brief--' + escapeHtml(meta.nivel) + '">' +
+            '<span class="velo-brief__label">Próximo passo</span>' +
+            '<p class="velo-brief__text">' + escapeHtml(step) + '</p></div>';
+    }
+
+    function renderStatusChips(client, canalLabel) {
+        const sit = (client.situacao || '').toLowerCase();
+        const sitClass = sit.indexOf('inadim') !== -1 ? 'velo-chip--danger' : 'velo-chip--success';
+        const sitIcon = sit.indexOf('inadim') !== -1 ? 'fa-exclamation-triangle' : 'fa-check-circle';
+        const risco = (client.risco || 'baixo').toLowerCase();
+        const riscoClass = risco.indexOf('alto') !== -1 ? 'velo-chip--danger' : risco.indexOf('méd') !== -1 || risco.indexOf('med') !== -1 ? 'velo-chip--warn' : 'velo-chip--success';
+        const ab = client.abandonoJornada || {};
+        let chips = '<div class="velo-client-chips">' +
+            '<span class="velo-chip ' + sitClass + '"><i class="fas ' + sitIcon + '"></i> ' + escapeHtml(client.situacao || '—') + '</span>' +
+            '<span class="velo-chip ' + riscoClass + '"><i class="fas fa-shield-halved"></i> Risco ' + escapeHtml(client.risco || '—') + '</span>' +
+            '<span class="velo-chip velo-chip--info"><i class="fas fa-comments"></i> ' + escapeHtml(canalLabel) + '</span>';
+        if (ab.total > 0) {
+            chips += '<span class="velo-chip velo-chip--warn"><i class="fas fa-route"></i> ' + ab.total + ' abandono(s)</span>';
+        }
+        return chips + '</div>';
+    }
+
+    function renderThermometer(client) {
+        if (!client) return '';
+        const meta = getThermoVisualMeta(client);
+        return '<div class="velo-thermo-compact velo-thermo-compact--' + escapeHtml(meta.nivel) + '" role="meter" aria-valuenow="' + meta.score + '" aria-valuemin="0" aria-valuemax="100">' +
+            '<div class="velo-thermo-dial velo-thermo-dial--sm" style="--thermo-score:' + meta.score + ';--thermo-color:' + meta.color + '">' +
+            '<div class="velo-thermo-dial__ring"></div>' +
+            '<div class="velo-thermo-dial__center">' +
+            '<span class="velo-thermo-dial__value">' + meta.score + '</span></div></div>' +
+            '<div class="velo-thermo-compact__label">' +
+            '<span class="velo-thermo-badge velo-thermo-badge--sm" style="background:' + meta.bg + ';color:' + meta.color + ';border-color:' + meta.border + '">' +
+            '<i class="fas ' + meta.icon + '"></i> ' + escapeHtml(meta.badge) + '</span>' +
+            '<span class="velo-thermo-compact__hint">Termômetro do cliente</span></div></div>';
+    }
+
+    function renderClientAccessButton(ticket) {
+        let label = 'Dados do cliente';
+        const cpfRaw = (ticket.lateralForm && ticket.lateralForm.cpf) || ticket.clientCPF || '';
+        const client = lookupClientByCpf(cpfRaw);
+        if (client && client.name) {
+            label = client.name;
+        } else if (ticket.clientName) {
+            label = ticket.clientName;
+        } else if (ticket.solicitante) {
+            label = ticket.solicitante;
+        }
+        return '<button type="button" class="btn-secondary velo-lf-client-btn" data-ticket-id="' + ticket.id + '" title="Ver cadastro e tickets do cliente">' +
+            '<i class="fas fa-user-circle"></i> <span>' + escapeHtml(label) + '</span></button>';
     }
 
     function renderClientInsights(client, ticketId) {
         if (!client) {
             return '<div class="velo-lf-db-empty" id="velo-lf-db-' + ticketId + '">' +
-                '<i class="fas fa-database"></i> Informe o CPF e clique em <strong>Consultar DB</strong> para carregar termômetro, produtos e análises.</div>';
+                '<i class="fas fa-user"></i> Informe o CPF e clique em <strong>Consultar</strong> para carregar dados do cliente, produtos e histórico.</div>';
         }
-        const produtos = (client.produtos || []).map(function (p) { return '<li>' + escapeHtml(p) + '</li>'; }).join('');
-        const atend = (client.atendimentos || []).slice(0, 3).map(function (a) {
-            return '<li><span>' + escapeHtml(a.data) + '</span> · ' + escapeHtml(a.canal) + ' — ' + escapeHtml(a.assunto) +
-                ' <em>(' + escapeHtml(a.status) + ')</em></li>';
-        }).join('');
-        const ab = client.abandonoJornada || {};
+        const ticket = getTicketById(parseInt(ticketId, 10));
+        const canalAtual = ticket ? detectChannel(ticket) : '';
+        const canalLabel = canalAtual || ((client.atendimentos && client.atendimentos[0]) ? client.atendimentos[0].canal : '—');
         return '<div class="velo-lf-db-panel" id="velo-lf-db-' + ticketId + '">' +
+            '<div class="velo-lf-db-head velo-lf-db-head--visual">' +
+            '<div class="velo-client-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>' +
+            '<div class="velo-client-head__body">' +
+            '<strong class="velo-client-name">' + escapeHtml(client.name) + '</strong>' +
+            renderStatusChips(client, canalLabel) +
+            '<div class="velo-product-tags velo-product-tags--inline">' + renderProductTags(client.produtos) + '</div>' +
+            '</div></div>' +
             renderThermometer(client) +
-            '<div class="velo-lf-db-head"><i class="fas fa-database"></i> Dados do cliente · ' + escapeHtml(client.name) + '</div>' +
-            '<div class="velo-lf-db-grid">' +
-            '<div><strong>Situação</strong><span>' + escapeHtml(client.situacao) + '</span></div>' +
-            '<div><strong>Risco</strong><span class="velo-lf-risk velo-lf-risk--' + escapeHtml((client.risco || 'baixo').toLowerCase()) + '">' + escapeHtml(client.risco) + '</span></div>' +
-            '<div><strong>Abandonos</strong><span>' + escapeHtml(String(ab.total || 0)) + ' · ' + escapeHtml(ab.ultimaEtapa || '—') + '</span></div>' +
-            '</div>' +
-            '<div class="velo-lf-db-block"><strong>Produtos contratados</strong><ul>' + produtos + '</ul></div>' +
-            '<div class="velo-lf-db-block"><strong>Atendimentos recentes</strong><ul class="velo-lf-db-list">' + atend + '</ul></div>' +
-            '<p class="velo-lf-db-analise"><i class="fas fa-brain"></i> ' + escapeHtml(client.analise || '') + '</p></div>';
+            renderClientSummary(client) +
+            '<div class="velo-lf-history velo-lf-history--compact">' +
+            '<strong class="velo-lf-history-title">Histórico</strong>' +
+            '<ul class="velo-lf-history-list">' + renderHistoryItems(client.atendimentos) + '</ul></div>' +
+            '</div>';
+    }
+
+    function bindDbPanelExtras(panel) {
+        /* reservado para interações futuras do painel DB */
     }
 
     function renderField(ticket, key, data, config) {
@@ -427,6 +547,7 @@
                     'placeholder="000.000.000-00" value="' + escapeHtml(formatCpf(val)) + '" maxlength="14">' +
                     '<button type="button" class="btn-secondary velo-lf-db-btn" data-ticket-id="' + ticket.id + '" title="Consultar DB">' +
                     '<i class="fas fa-search"></i></button></div>' +
+                    renderClientAccessButton(ticket) +
                     renderClientInsights(lookupClientByCpf(val), ticket.id);
                 break;
             case 'canal':
@@ -494,6 +615,10 @@
             ? ticket.title.substring(0, 28) + '…'
             : (ticket.title || 'Sem título');
 
+        const aiTabHtml = typeof window.renderVeloTabulationSuggestionHtml === 'function'
+            ? window.renderVeloTabulationSuggestionHtml(ticket)
+            : '';
+
         return '<div class="velo-lateral-form-panel" data-ticket-id="' + ticket.id + '">' +
             '<div class="velo-lf-header">' +
             '<div class="velo-lf-header-text">' +
@@ -502,6 +627,7 @@
             '</div>' +
             '<span class="velo-lf-badge">Fixo</span></div>' +
             '<div class="velo-lf-fields">' + fieldsHtml + '</div>' +
+            aiTabHtml +
             '<div class="velo-lf-actions">' +
             '<button type="button" class="btn-primary velo-lf-save" data-ticket-id="' + ticket.id + '">' +
             '<i class="fas fa-save"></i> Salvar no ticket</button></div></div>';
@@ -537,6 +663,7 @@
         const tmp = document.createElement('div');
         tmp.innerHTML = renderClientInsights(client, ticketId);
         host.replaceWith(tmp.firstElementChild);
+        bindDbPanelExtras(panel);
 
         if (client && client.produtos && client.produtos.length) {
             const prodEl = panel.querySelector('[data-lf-key="produto"]');
@@ -620,6 +747,12 @@
             lookupCpfFromPanel(panel, ticketId, true);
         });
 
+        panel.querySelector('.velo-lf-client-btn')?.addEventListener('click', function () {
+            if (typeof openClientFromTicket === 'function') {
+                openClientFromTicket(ticketId);
+            }
+        });
+
         const cpfEl = panel.querySelector('[data-lf-key="cpf"]');
         if (cpfEl) {
             cpfEl.addEventListener('blur', function () {
@@ -653,6 +786,7 @@
 
         const cpfVal = panel.querySelector('[data-lf-key="cpf"]')?.value;
         if (normalizeCpf(cpfVal).length === 11) refreshDbPanel(panel, ticketId, cpfVal);
+        bindDbPanelExtras(panel);
     }
 
     function saveActiveTicketFormBeforeSwitch() {
@@ -932,7 +1066,14 @@
     window.saveVelodeskLateralFormConfig = saveConfigFromUI;
     window.applyLateralFormConfigToAllTickets = applyLateralFormConfigToAllTickets;
     window.bindTicketLateralFormEvents = bindFormEvents;
+    window.refreshTicketLateralFormPanel = refreshTicketLateralFormPanel;
     window.lookupVelodeskClientByCpf = lookupClientByCpf;
+    window.detectVelodeskTicketChannel = detectChannel;
+    window.refreshTicketLateralFormCascade = function (ticketId) {
+        const panel = document.querySelector('.velo-lateral-form-panel[data-ticket-id="' + ticketId + '"]');
+        if (panel) refreshCascadeFields(panel, parseInt(ticketId, 10));
+    };
+    window.persistTicketLateralForm = persistLateralForm;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', patchTicketHooks);

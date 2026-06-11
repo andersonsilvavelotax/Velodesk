@@ -240,6 +240,234 @@
         observer.observe(document.body, { childList: true, subtree: true });
     }
 
+    /* ─── IA: tickets abertos pelo cliente (canais digitais, não ligação) ─── */
+    function detectTicketChannel(ticket) {
+        if (!ticket) return '';
+        if (typeof window.detectVelodeskTicketChannel === 'function') {
+            return window.detectVelodeskTicketChannel(ticket);
+        }
+        if (ticket.lateralForm && ticket.lateralForm.canal) return ticket.lateralForm.canal;
+        return ticket.channel || ticket.source || 'Portal';
+    }
+
+    function isClientDigitalTicket(ticket) {
+        if (!ticket || ticket.isNewTicket) return false;
+        const ch = String(detectTicketChannel(ticket)).toLowerCase();
+        if (/telefone|ligação|ligacao|phone|voip|presencial/.test(ch)) return false;
+        if (ticket.openedBy === 'agent' || ticket.createdBy === 'agent') return false;
+        if (ticket.openedBy === 'client') return true;
+        if (ticket.phone && !ticket.source && !ticket.channel && !(ticket.lateralForm && ticket.lateralForm.canal)) {
+            return false;
+        }
+        if (/whatsapp|portal|e-mail|email|chat|web/.test(ch)) return true;
+        if (ticket.messages && ticket.messages.some(function (m) {
+            return m.fromClient === true || m.type === 'client' || m.sender === 'them';
+        })) return true;
+        return !!(ticket.description && ticket.source && !/telefone|phone|ligação|ligacao/i.test(String(ticket.source)));
+    }
+
+    function extractClientMessage(ticket) {
+        if (!ticket) return '';
+        if (ticket.messages && ticket.messages.length) {
+            const clientMsgs = ticket.messages.filter(function (m) {
+                return m.fromClient === true || m.type === 'client' || m.sender === 'them';
+            });
+            if (clientMsgs.length) return String(clientMsgs[clientMsgs.length - 1].text || '').trim();
+        }
+        if (ticket.description) return String(ticket.description).trim();
+        return '';
+    }
+
+    function inferTabulationFromMessage(text, ticket) {
+        const msg = String(text || '').toLowerCase();
+        const ticketHint = ticket && ticket.lateralForm ? ticket.lateralForm : {};
+        const out = {};
+
+        if (/cancel|encerr|desistir/.test(msg)) out.classificacaoTipo = 'Cancelamento';
+        else if (/reten/.test(msg)) out.classificacaoTipo = 'Retenção';
+        else if (/reclam|lent|problema|insatis|duplic|bloqueio|contest/.test(msg)) out.classificacaoTipo = 'Reclamação';
+        else if (/upgrade|solicit|agend|negoci|mudança|mudanca|contrat/.test(msg)) out.classificacaoTipo = 'Solicitação';
+        else if (/inform|dúvida|duvida|como funciona/.test(msg)) out.classificacaoTipo = 'Informação';
+        else if (/elog|obrigad|parab/.test(msg)) out.classificacaoTipo = 'Elogio';
+
+        if (/fibra|internet|lent|wifi|wi-fi|roteador|\bmb\b/.test(msg)) out.produto = 'Internet Fibra';
+        else if (/\btv\b|canal|decoder|decodificador|tela preta/.test(msg)) out.produto = 'TV';
+        else if (/combo|móvel|movel|celular|chip|portabil|bloqueio/.test(msg)) {
+            out.produto = /combo/.test(msg) ? 'Combo' : 'Móvel';
+        } else if (/fixo|telefone fixo|sem tom/.test(msg)) out.produto = 'Telefone Fixo';
+        else if (/stream|app|login/.test(msg)) out.produto = 'Streaming';
+
+        if (/lent|veloc|wifi|wi-fi|queda/.test(msg)) out.motivo = 'Lentidão';
+        else if (/instala|agend|técnico|tecnico|visita|upgrade|link|corporat|dedicad/.test(msg)) out.motivo = 'Instalação';
+        else if (/cancel|encerr|desist/.test(msg)) out.motivo = 'Cancelamento';
+        else if (/cobran|fatura|boleto|duplic|inadim|bloqueio|contest|débito|debito/.test(msg)) out.motivo = 'Cobrança';
+        else if (/sinal|chip|portabil/.test(msg)) out.motivo = 'Sem sinal';
+        else if (/canal|tela/.test(msg)) out.motivo = 'Canal indisponível';
+
+        if (/escal|n2|análise|analise/.test(msg)) out.detalhe = 'Escalado N2';
+        else if (/técnico|tecnico|aguard/.test(msg)) out.detalhe = 'Aguardando técnico';
+        else if (/contest/.test(msg)) out.detalhe = 'Contestação';
+        else if (/reten/.test(msg)) out.detalhe = 'Retenção acionada';
+        else if (/negoci|agend/.test(msg)) out.detalhe = 'Agendamento pendente';
+
+        ['classificacaoTipo', 'produto', 'motivo', 'detalhe'].forEach(function (k) {
+            if (!out[k] && ticketHint[k]) out[k] = ticketHint[k];
+        });
+
+        return out;
+    }
+
+    function suggestClientResponse(messageText, ticket) {
+        const msg = String(messageText || '').toLowerCase();
+        const fullName = (ticket && (ticket.clientName || ticket.solicitante)) || 'cliente';
+        const firstName = fullName.split(/\s+/)[0] || 'cliente';
+        let body = '';
+
+        if (/lent|veloc|wifi|wi-fi|fibra|internet|queda|roteador/.test(msg)) {
+            body = 'Entendemos a dificuldade com a conexão no período informado. Nossa equipe já iniciou a análise da sua linha e, se necessário, agendará visita técnica com prioridade.';
+        } else if (/bloque|inadim|fatura|cobran|boleto|débito|debito|duplic|contest/.test(msg)) {
+            body = 'Recebemos sua solicitação referente à situação de faturamento. Vamos verificar os débitos em aberto e apresentar as opções de regularização ou negociação disponíveis para o seu plano.';
+        } else if (/cancel|encerr|desist/.test(msg)) {
+            body = 'Registramos sua intenção de cancelamento. Antes de prosseguir, gostaríamos de entender melhor sua necessidade e verificar alternativas que possam atendê-lo(a).';
+        } else if (/upgrade|link|corporat|contrat|dedicad/.test(msg)) {
+            body = 'Agradecemos o interesse na evolução do seu plano. Nossa equipe analisará a viabilidade técnica e retornará com proposta e prazos para implementação.';
+        } else if (/instala|agend|visita|técnico|tecnico/.test(msg)) {
+            body = 'Vamos verificar a disponibilidade de agenda e confirmar data e janela de atendimento. Em breve enviaremos a confirmação por este mesmo canal.';
+        } else {
+            body = 'Recebemos sua mensagem e nossa equipe está analisando os detalhes informados. Retornaremos em breve com a atualização do atendimento.';
+        }
+
+        const channel = String(detectTicketChannel(ticket)).toLowerCase();
+        const opener = /whatsapp|chat/.test(channel)
+            ? 'Olá, ' + firstName + '!'
+            : 'Prezado(a) ' + fullName + ',';
+
+        return reviewTextWithAI(opener + ' ' + body + ' Permaneço à disposição para qualquer dúvida.').revised;
+    }
+
+    function formatTabulationSuggestionLabel(tab) {
+        const parts = [];
+        if (tab.classificacaoTipo) parts.push(tab.classificacaoTipo);
+        if (tab.produto) parts.push(tab.produto);
+        if (tab.motivo) parts.push(tab.motivo);
+        if (tab.detalhe) parts.push(tab.detalhe);
+        return parts.join(' → ') || '—';
+    }
+
+    function renderVeloClientResponseSuggestionHtml(ticket, messageText) {
+        if (!isClientDigitalTicket(ticket)) return '';
+        const text = messageText || extractClientMessage(ticket);
+        if (!text) return '';
+        const suggestion = suggestClientResponse(text, ticket);
+        const tid = ticket.id;
+        return '<div class="velo-ai-suggest velo-ai-suggest--response" data-ticket-id="' + tid + '">' +
+            '<div class="velo-ai-suggest__head">' +
+            '<span class="velo-ai-suggest__title"><i class="fas fa-robot"></i> Sugestão de resposta</span>' +
+            '<span class="velo-ai-suggest__tag">IA · tom Velodesk</span></div>' +
+            '<p class="velo-ai-suggest__text">' + escapeHtmlEcosystem(suggestion) + '</p>' +
+            '<div class="velo-ai-suggest__actions">' +
+            '<button type="button" class="btn-primary btn-sm velo-ai-apply-response" data-ticket-id="' + tid + '">Usar na resposta</button>' +
+            '<button type="button" class="btn-secondary btn-sm velo-ai-copy-response" data-ticket-id="' + tid + '">Copiar</button>' +
+            '</div></div>';
+    }
+
+    function renderVeloTabulationSuggestionHtml(ticket) {
+        if (!isClientDigitalTicket(ticket)) return '';
+        const text = extractClientMessage(ticket);
+        if (!text) return '';
+        const tab = inferTabulationFromMessage(text, ticket);
+        if (!tab.classificacaoTipo && !tab.produto && !tab.motivo) return '';
+        const tid = ticket.id;
+        const label = formatTabulationSuggestionLabel(tab);
+        return '<div class="velo-ai-suggest velo-ai-suggest--tabulation" data-ticket-id="' + tid + '">' +
+            '<textarea class="velo-ai-tabulation-data" aria-hidden="true" tabindex="-1" readonly style="display:none">' + escapeHtmlEcosystem(JSON.stringify(tab)) + '</textarea>' +
+            '<div class="velo-ai-suggest__head">' +
+            '<span class="velo-ai-suggest__title"><i class="fas fa-sitemap"></i> Sugestão de tabulação</span>' +
+            '<span class="velo-ai-suggest__tag">IA</span></div>' +
+            '<p class="velo-ai-suggest__path">' + escapeHtmlEcosystem(label) + '</p>' +
+            '<div class="velo-ai-suggest__actions">' +
+            '<button type="button" class="btn-primary btn-sm velo-ai-apply-tabulation" data-ticket-id="' + tid + '">Aplicar tabulação</button>' +
+            '</div></div>';
+    }
+
+    window.applyVeloSuggestedResponse = function (ticketId) {
+        const box = document.querySelector('.velo-ai-suggest--response[data-ticket-id="' + ticketId + '"]');
+        const ta = document.getElementById('publicResponse-' + ticketId);
+        if (!box || !ta) return;
+        const suggestion = box.querySelector('.velo-ai-suggest__text');
+        if (suggestion && suggestion.textContent) {
+            ta.value = suggestion.textContent.trim();
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+            ta.focus();
+            if (typeof showNotification === 'function') showNotification('Resposta sugerida aplicada ao campo', 'success');
+        }
+    };
+
+    window.applyVeloSuggestedTabulation = function (ticketId) {
+        const box = document.querySelector('.velo-ai-suggest--tabulation[data-ticket-id="' + ticketId + '"]');
+        const panel = document.querySelector('.velo-lateral-form-panel[data-ticket-id="' + ticketId + '"]');
+        if (!box || !panel) return;
+        const dataEl = box.querySelector('.velo-ai-tabulation-data');
+        let tab = {};
+        try {
+            tab = JSON.parse(dataEl ? (dataEl.value || dataEl.textContent) : '{}');
+        } catch (e) { return; }
+
+        Object.keys(tab).forEach(function (key) {
+            const el = panel.querySelector('[data-lf-key="' + key + '"]');
+            if (el && tab[key]) el.value = tab[key];
+        });
+
+        if (typeof window.refreshTicketLateralFormCascade === 'function') {
+            window.refreshTicketLateralFormCascade(ticketId);
+        }
+
+        setTimeout(function () {
+            Object.keys(tab).forEach(function (key) {
+                const el = panel.querySelector('[data-lf-key="' + key + '"]');
+                if (el && tab[key]) el.value = tab[key];
+            });
+            if (typeof window.persistTicketLateralForm === 'function') {
+                window.persistTicketLateralForm(ticketId, false);
+            }
+            if (typeof showNotification === 'function') showNotification('Tabulação sugerida aplicada', 'success');
+        }, 80);
+    };
+
+    function initClientTicketAiSuggestions() {
+        document.addEventListener('click', function (e) {
+            const applyResp = e.target.closest('.velo-ai-apply-response');
+            if (applyResp) {
+                e.preventDefault();
+                window.applyVeloSuggestedResponse(applyResp.getAttribute('data-ticket-id'));
+                return;
+            }
+            const copyResp = e.target.closest('.velo-ai-copy-response');
+            if (copyResp) {
+                e.preventDefault();
+                const tid = copyResp.getAttribute('data-ticket-id');
+                const textEl = document.querySelector('.velo-ai-suggest--response[data-ticket-id="' + tid + '"] .velo-ai-suggest__text');
+                const text = textEl ? textEl.textContent.trim() : '';
+                if (text && navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function () {
+                        if (typeof showNotification === 'function') showNotification('Texto copiado', 'info');
+                    });
+                }
+                return;
+            }
+            const applyTab = e.target.closest('.velo-ai-apply-tabulation');
+            if (applyTab) {
+                e.preventDefault();
+                window.applyVeloSuggestedTabulation(applyTab.getAttribute('data-ticket-id'));
+            }
+        });
+    }
+
+    window.renderVeloClientResponseSuggestionHtml = renderVeloClientResponseSuggestionHtml;
+    window.renderVeloTabulationSuggestionHtml = renderVeloTabulationSuggestionHtml;
+    window.isClientDigitalTicket = isClientDigitalTicket;
+    window.extractVelodeskClientMessage = extractClientMessage;
+
     function statCard(icon, value, label, warn) {
         return `<div class="ws-stat${warn ? ' ws-stat--warn' : ''}">
             <div class="ws-stat-icon"><i class="fas ${icon}"></i></div>
@@ -259,6 +487,255 @@
         if (!dd.contains(e.target) && !badge.contains(e.target)) dd.classList.remove('open');
     });
 
+    function findAllKanbanTickets() {
+        const columns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+        const list = [];
+        columns.forEach(function (c) {
+            (c.tickets || []).forEach(function (t) { list.push(t); });
+        });
+        return list;
+    }
+
+    function findTicketForSmartReason(reason) {
+        const tickets = findAllKanbanTickets();
+        if (!tickets.length) return null;
+        if (reason === 'sla') {
+            return tickets.find(function (t) { return t.priority === 'critica' || t.priority === 'critical' || t.slaCritical; }) || tickets[0];
+        }
+        if (reason === 'monitoria') {
+            return tickets.find(function (t) { return t.status === 'em-aberto'; }) || tickets[1] || tickets[0];
+        }
+        if (reason === 'treinamento') {
+            return tickets.find(function (t) { return t.status === 'novo'; }) || tickets[0];
+        }
+        if (reason === 'retorno') {
+            return tickets.find(function (t) { return t.status === 'pendente' || t.status === 'em-espera'; }) || tickets[tickets.length - 1];
+        }
+        return tickets[0];
+    }
+
+    function renderSmartNotificationsHtml() {
+        const defs = [
+            { reason: 'sla', type: 'critical', label: 'SLA crítico', textFn: function (t) { return 'Ticket #' + t.id + ' — ' + (t.title || 'prioridade crítica'); } },
+            { reason: 'monitoria', type: 'warning', label: 'Monitoria', textFn: function (t) { return 'Feedback disponível no ticket #' + t.id; } },
+            { reason: 'treinamento', type: 'info', label: 'Treinamento', textFn: function (t) { return 'Treinamento pendente vinculado ao ticket #' + t.id; } },
+            { reason: 'retorno', type: 'default', label: 'Retorno', textFn: function (t) { return 'Cliente aguardando resposta — ticket #' + t.id; } }
+        ];
+        return defs.map(function (d) {
+            const t = findTicketForSmartReason(d.reason);
+            if (!t) {
+                return '<li class="ws-notif ws-notif--muted"><span>' + escapeHtmlEcosystem(d.label) + '</span> Sem tickets elegíveis</li>';
+            }
+            const typeClass = d.type === 'critical' ? 'ws-notif--critical' : d.type === 'warning' ? 'ws-notif--warning' : '';
+            return '<li class="ws-notif ' + typeClass + ' ws-notif--clickable" role="button" tabindex="0" onclick="openSmartNotificationTicket(' + t.id + ')">' +
+                '<span>' + escapeHtmlEcosystem(d.label) + '</span> ' + escapeHtmlEcosystem(d.textFn(t)) + '</li>';
+        }).join('');
+    }
+
+    function normalizeDeskCpf(value) {
+        return String(value || '').replace(/\D/g, '');
+    }
+
+    function getStatusLabelDesk(status) {
+        if (typeof window.getVeloStatusLabel === 'function') return window.getVeloStatusLabel(status);
+        return status || '—';
+    }
+
+    function computeAgentDeskData() {
+        const tickets = findAllKanbanTickets();
+        const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const agentName = user.name || 'Agente';
+        const db = JSON.parse(localStorage.getItem('velodeskClientDB') || '{}');
+        const trainings = JSON.parse(localStorage.getItem('velodeskTrainings') || '[]');
+        const monitorQueue = JSON.parse(localStorage.getItem('velodeskMonitorQueue') || '[]');
+
+        const counts = { total: tickets.length, novos: 0, andamento: 0, pendente: 0, slaCritico: 0, resolvidos: 0 };
+        const priorityScore = { critica: 4, critical: 4, alta: 3, high: 3, normal: 2, baixa: 1 };
+
+        tickets.forEach(function (t) {
+            if (t.status === 'novo') counts.novos++;
+            else if (t.status === 'em-aberto') counts.andamento++;
+            else if (t.status === 'pendente' || t.status === 'em-espera') counts.pendente++;
+            else if (t.status === 'resolvido') counts.resolvidos++;
+            if (t.priority === 'critica' || t.priority === 'critical') counts.slaCritico++;
+        });
+
+        const prioritized = tickets.slice().sort(function (a, b) {
+            const pa = priorityScore[a.priority] || 1;
+            const pb = priorityScore[b.priority] || 1;
+            if (pb !== pa) return pb - pa;
+            return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+        });
+
+        const hotClients = [];
+        const seenCpf = {};
+        tickets.forEach(function (t) {
+            const cpf = normalizeDeskCpf((t.lateralForm && t.lateralForm.cpf) || t.clientCPF);
+            if (!cpf || seenCpf[cpf]) return;
+            const client = db[cpf];
+            if (!client) return;
+            const score = client.termometro != null ? client.termometro : 0;
+            const riscoAlto = String(client.risco || '').toLowerCase().indexOf('alto') !== -1;
+            if (score >= 55 || riscoAlto) {
+                seenCpf[cpf] = true;
+                hotClients.push({ ticket: t, client: client, score: score });
+            }
+        });
+        hotClients.sort(function (a, b) { return b.score - a.score; });
+
+        const channels = {};
+        tickets.forEach(function (t) {
+            const ch = (t.lateralForm && t.lateralForm.canal) || t.channel || t.source || 'Outros';
+            channels[ch] = (channels[ch] || 0) + 1;
+        });
+
+        return {
+            agentName: agentName,
+            counts: counts,
+            prioritized: prioritized,
+            hotClients: hotClients,
+            trainings: trainings,
+            monitorQueue: monitorQueue,
+            channels: channels
+        };
+    }
+
+    function renderAgentQueueHtml(tickets) {
+        if (!tickets.length) {
+            return '<p class="ws-empty">Nenhum ticket na fila. Use <strong>Registro rápido</strong> ou aguarde novos atendimentos.</p>';
+        }
+        return '<ul class="ws-queue-list">' + tickets.slice(0, 6).map(function (t) {
+            const pri = t.priority || 'normal';
+            const priClass = pri === 'critica' || pri === 'critical' ? 'critical' : pri === 'alta' ? 'high' : 'normal';
+            const title = (t.title || 'Sem título').length > 42 ? (t.title || '').substring(0, 42) + '…' : (t.title || 'Sem título');
+            const client = t.clientName || t.solicitante || '';
+            return '<li class="ws-queue-item" role="button" tabindex="0" onclick="openSmartNotificationTicket(' + t.id + ')">' +
+                '<div class="ws-queue-item__row">' +
+                '<span class="ws-queue-item__id">#' + t.id + '</span>' +
+                '<span class="ws-queue-priority ws-queue-priority--' + priClass + '">' + escapeHtmlEcosystem(pri) + '</span></div>' +
+                '<div class="ws-queue-item__title">' + escapeHtmlEcosystem(title) + '</div>' +
+                (client ? '<div class="ws-queue-item__client"><i class="fas fa-user"></i> ' + escapeHtmlEcosystem(client) + '</div>' : '') +
+                '<div class="ws-queue-item__meta">' + escapeHtmlEcosystem(getStatusLabelDesk(t.status)) + '</div></li>';
+        }).join('') + '</ul>';
+    }
+
+    function renderHotClientsHtml(items) {
+        if (!items.length) {
+            return '<p class="ws-empty">Nenhum cliente com termômetro elevado no momento.</p>';
+        }
+        return '<ul class="ws-hot-list">' + items.slice(0, 4).map(function (item) {
+            const c = item.client;
+            const score = item.score;
+            const nivel = score >= 80 ? 'quente' : score >= 55 ? 'morno' : 'frio';
+            return '<li class="ws-hot-item ws-hot-item--' + nivel + '" role="button" tabindex="0" onclick="openSmartNotificationTicket(' + item.ticket.id + ')">' +
+                '<div class="ws-hot-item__score">' + score + '°</div>' +
+                '<div><strong>' + escapeHtmlEcosystem(c.name) + '</strong>' +
+                '<span>' + escapeHtmlEcosystem(c.situacao || '') + ' · Risco ' + escapeHtmlEcosystem(c.risco || '—') + '</span>' +
+                '<em>Ticket #' + item.ticket.id + '</em></div></li>';
+        }).join('') + '</ul>';
+    }
+
+    function renderDeskChannelsHtml(channels) {
+        const keys = Object.keys(channels);
+        if (!keys.length) return '';
+        return '<div class="ws-channel-pills">' + keys.map(function (ch) {
+            return '<span class="ws-channel-pill"><i class="fas fa-hashtag"></i> ' + escapeHtmlEcosystem(ch) + ' <strong>' + channels[ch] + '</strong></span>';
+        }).join('') + '</div>';
+    }
+
+    function renderAgentDeskShortcuts() {
+        return '<div class="ws-desk-shortcuts">' +
+            '<button type="button" class="ws-desk-btn" onclick="navigateToPage(\'tickets\')"><i class="fas fa-inbox"></i><span>Abrir tickets</span></button>' +
+            '<button type="button" class="ws-desk-btn" onclick="openQuickRegisterModal()"><i class="fas fa-bolt"></i><span>Registro rápido</span></button>' +
+            '<button type="button" class="ws-desk-btn" onclick="navigateToPage(\'chat\')"><i class="fas fa-comments"></i><span>Chat</span></button>' +
+            MACROS.map(function (m) {
+                return '<button type="button" class="ws-desk-btn ws-desk-btn--macro" onclick="insertMacro(\'' + m.key + '\')" title="' + escapeHtmlEcosystem(m.title) + '"><kbd>' + m.key + '</kbd><span>' + escapeHtmlEcosystem(m.title) + '</span></button>';
+            }).join('') +
+            '</div>';
+    }
+
+    function renderAgentWorkspaceHtml() {
+        const desk = computeAgentDeskData();
+        const now = new Date();
+        const greeting = now.getHours() < 12 ? 'Bom dia' : now.getHours() < 18 ? 'Boa tarde' : 'Boa noite';
+        const dateStr = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+        const monitorPending = desk.monitorQueue.length;
+
+        return '<div class="ws-agent-desk">' +
+            '<div class="ws-hero ws-hero--agent">' +
+            '<div class="ws-agent-greeting">' +
+            '<span class="ws-eyebrow">' + escapeHtmlEcosystem(dateStr) + '</span>' +
+            '<h3>' + greeting + ', ' + escapeHtmlEcosystem(desk.agentName.split(' ')[0]) + '</h3>' +
+            '<p>Seu desk está pronto. ' + desk.counts.total + ' ticket(s) na operação · priorize SLA e clientes críticos.</p>' +
+            renderDeskChannelsHtml(desk.channels) +
+            '</div>' +
+            '<div class="ws-hero-actions">' +
+            '<button type="button" class="btn-primary" onclick="navigateToPage(\'tickets\')"><i class="fas fa-play"></i> Iniciar atendimentos</button>' +
+            '<button type="button" class="btn-secondary" onclick="openQuickRegisterModal()"><i class="fas fa-bolt"></i> Registro rápido</button>' +
+            '</div></div>' +
+
+            '<div class="ws-stats-grid">' +
+            statCard('fa-inbox', desk.counts.novos, 'Novos na fila', desk.counts.novos > 0) +
+            statCard('fa-headset', desk.counts.andamento, 'Em andamento') +
+            statCard('fa-clock', desk.counts.slaCritico, 'SLA crítico', desk.counts.slaCritico > 0) +
+            statCard('fa-reply', desk.counts.pendente, 'Aguardando retorno', desk.counts.pendente > 0) +
+            '</div>' +
+
+            '<div class="ws-grid-2 ws-agent-grid">' +
+            '<section class="ws-panel ws-panel--queue">' +
+            '<h4><i class="fas fa-list-ol"></i> Fila prioritária</h4>' +
+            '<p class="ws-panel-hint">Clique para abrir o ticket no desk.</p>' +
+            renderAgentQueueHtml(desk.prioritized) +
+            '</section>' +
+
+            '<section class="ws-panel ws-panel--notif">' +
+            '<h4><i class="fas fa-bell"></i> Atenção imediata</h4>' +
+            '<ul class="ws-notif-list">' + renderSmartNotificationsHtml() + '</ul>' +
+            (monitorPending ? '<p class="ws-panel-foot"><i class="fas fa-clipboard-check"></i> ' + monitorPending + ' avaliação(ões) de monitoria na fila.</p>' : '') +
+            '</section></div>' +
+
+            '<div class="ws-grid-2 ws-agent-grid">' +
+            '<section class="ws-panel ws-panel--hot">' +
+            '<h4><i class="fas fa-fire"></i> Clientes em alerta</h4>' +
+            '<p class="ws-panel-hint">Termômetro elevado ou risco alto — dados do cadastro consultado.</p>' +
+            renderHotClientsHtml(desk.hotClients) +
+            '</section>' +
+
+            '<section class="ws-panel ws-panel--shortcuts">' +
+            '<h4><i class="fas fa-rocket"></i> Acesso rápido ao desk</h4>' +
+            renderAgentDeskShortcuts() +
+            '</section></div>' +
+
+            (desk.trainings.length ? '<section class="ws-panel ws-panel--training">' +
+            '<h4><i class="fas fa-graduation-cap"></i> Treinamentos recomendados</h4>' +
+            '<div class="ws-training-list">' + desk.trainings.map(function (t) {
+                return '<div class="ws-training-item ws-priority-' + t.priority + '">' +
+                    '<div><strong>' + escapeHtmlEcosystem(t.title) + '</strong><p>' + escapeHtmlEcosystem(t.reason) + '</p></div>' +
+                    '<span class="ws-duration">' + escapeHtmlEcosystem(t.duration) + '</span></div>';
+            }).join('') + '</div></section>' : '') +
+            '</div>';
+    }
+
+    window.openSmartNotificationTicket = function (ticketId) {
+        if (typeof navigateToPage === 'function') navigateToPage('tickets');
+        setTimeout(function () {
+            if (typeof openTicket === 'function') openTicket(ticketId);
+        }, 250);
+    };
+
+    function tryAutoOpenSmartTicket() {
+        if (sessionStorage.getItem('velodeskAutoOpenDone') === '1') return;
+        const t = findTicketForSmartReason('sla');
+        if (!t || typeof openTicket !== 'function') return;
+        sessionStorage.setItem('velodeskAutoOpenDone', '1');
+        setTimeout(function () {
+            if (typeof navigateToPage === 'function') navigateToPage('tickets');
+            setTimeout(function () { openTicket(t.id); }, 400);
+        }, 1200);
+    }
+
+    window.VelodeskMACROS = MACROS;
+
     /* ─── Painel 360 por perfil ─── */
     window.renderWorkspace360 = function renderWorkspace360() {
         const el = document.getElementById('workspace360Content');
@@ -272,39 +749,7 @@
         columns.forEach(c => { if (c.tickets) pendingTickets += c.tickets.length; });
 
         const blocks = {
-            agent: `
-                <div class="ws-hero ws-hero--agent">
-                    <div><span class="ws-eyebrow">Workspace do Agente</span><h3>Painel 360°</h3><p>Tickets, monitoria, treinamentos e metas — tudo fluindo em uma única tela.</p></div>
-                    <div class="ws-hero-actions">
-                        <button class="btn-primary" onclick="openQuickRegisterModal()"><i class="fas fa-bolt"></i> Registro rápido</button>
-                    </div>
-                </div>
-                <div class="ws-stats-grid">
-                    ${statCard('fa-ticket-alt', pendingTickets, 'Tickets pendentes')}
-                    ${statCard('fa-clock', '2', 'SLA crítico', true)}
-                    ${statCard('fa-clipboard-check', '1', 'Apontamento monitoria')}
-                    ${statCard('fa-graduation-cap', trainings.length, 'Treinamentos')}
-                </div>
-                <div class="ws-grid-2">
-                    <section class="ws-panel"><h4><i class="fas fa-bell"></i> Notificações inteligentes</h4>
-                        <ul class="ws-notif-list">
-                            <li class="ws-notif ws-notif--critical"><span>SLA crítico</span> Ticket #4512 vence em 45 min</li>
-                            <li class="ws-notif ws-notif--warning"><span>Monitoria</span> Feedback disponível no ticket #4498</li>
-                            <li class="ws-notif"><span>Treinamento</span> Trilha recomendada: Comunicação empática</li>
-                            <li class="ws-notif"><span>Retorno</span> Cliente respondeu ticket #4505</li>
-                        </ul>
-                    </section>
-                    <section class="ws-panel"><h4><i class="fas fa-keyboard"></i> Macros (atalhos)</h4>
-                        <div class="ws-macros">${MACROS.map(m => `<button type="button" class="ws-macro-btn" onclick="insertMacro('${m.key}')" title="${m.key}"><kbd>${m.key}</kbd> ${escapeHtmlEcosystem(m.title)}</button>`).join('')}</div>
-                    </section>
-                </div>
-                <section class="ws-panel"><h4><i class="fas fa-graduation-cap"></i> Treinamentos recomendados pela IA</h4>
-                    <div class="ws-training-list">${trainings.map(t => `
-                        <div class="ws-training-item ws-priority-${t.priority}">
-                            <div><strong>${escapeHtmlEcosystem(t.title)}</strong><p>${escapeHtmlEcosystem(t.reason)}</p></div>
-                            <span class="ws-duration">${t.duration}</span>
-                        </div>`).join('')}</div>
-                </section>`,
+            agent: renderAgentWorkspaceHtml(),
             supervisor: `
                 <div class="ws-hero ws-hero--supervisor">
                     <div><span class="ws-eyebrow">Supervisão</span><h3>Performance da equipe</h3><p>SLA, escalonamentos e alertas em tempo real.</p></div>
@@ -509,22 +954,136 @@
         if (typeof showNotification === 'function') showNotification('Ticket criado com sugestão da IA!', 'success');
     };
 
-    /* ─── Cliente 360 ─── */
+    /* ─── Cliente do atendimento (popup por ticket) ─── */
+    function normalizeClientCpf(value) {
+        return String(value || '').replace(/\D/g, '');
+    }
+
+    function findKanbanTicketById(ticketId) {
+        const id = parseInt(ticketId, 10);
+        const columns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+        for (const box of columns) {
+            if (!box.tickets) continue;
+            const t = box.tickets.find(function (x) { return x.id === id; });
+            if (t) return t;
+        }
+        const tabInfo = window.openTicketTabs && window.openTicketTabs.get(id);
+        return tabInfo ? tabInfo.ticket : null;
+    }
+
+    function getCpfFromTicketRecord(ticket, ticketId) {
+        if (!ticket) return '';
+        const panelCpf = document.querySelector('.velo-lateral-form-panel[data-ticket-id="' + ticketId + '"] [data-lf-key="cpf"]');
+        const liveCpf = panelCpf ? panelCpf.value : '';
+        return normalizeClientCpf(
+            liveCpf || (ticket.lateralForm && ticket.lateralForm.cpf) || ticket.clientCPF || ''
+        );
+    }
+
+    function collectClientTickets(cpf, clientName) {
+        const columns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+        const list = [];
+        const nameKey = (clientName || '').toLowerCase().trim();
+        columns.forEach(function (box) {
+            (box.tickets || []).forEach(function (t) {
+                const tCpf = normalizeClientCpf((t.lateralForm && t.lateralForm.cpf) || t.clientCPF || '');
+                const tName = (t.clientName || t.solicitante || '').toLowerCase();
+                const titleMatch = nameKey && (t.title || '').toLowerCase().indexOf(nameKey) !== -1;
+                if ((cpf && tCpf === cpf) || (nameKey && (tName === nameKey || titleMatch))) {
+                    list.push(t);
+                }
+            });
+        });
+        list.sort(function (a, b) {
+            return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+        });
+        return list;
+    }
+
+    function renderClientTicketRows(tickets) {
+        if (!tickets.length) {
+            return '<tr><td colspan="5" class="client360-empty">Nenhum ticket encontrado para este cliente.</td></tr>';
+        }
+        return tickets.map(function (t) {
+            const statusLabel = typeof getVeloStatusLabel === 'function'
+                ? getVeloStatusLabel(t.status)
+                : (t.status || '—');
+            const date = t.updatedAt || t.createdAt;
+            const dateFmt = date ? new Date(date).toLocaleDateString('pt-BR') : '—';
+            const channel = (t.lateralForm && t.lateralForm.canal) || t.channel || t.source || '—';
+            return '<tr class="client360-row--clickable" onclick="openClientTicketFromModal(' + t.id + ')">' +
+                '<td>#' + t.id + '</td>' +
+                '<td>' + escapeHtmlEcosystem(t.title || 'Sem título') + '</td>' +
+                '<td>' + escapeHtmlEcosystem(channel) + '</td>' +
+                '<td>' + escapeHtmlEcosystem(statusLabel) + '</td>' +
+                '<td>' + escapeHtmlEcosystem(dateFmt) + '</td></tr>';
+        }).join('');
+    }
+
+    window.openClientTicketFromModal = function (ticketId) {
+        closeEcosystemModal();
+        if (typeof openTicket === 'function') {
+            if (typeof navigateToPage === 'function') navigateToPage('tickets');
+            setTimeout(function () { openTicket(ticketId); }, 200);
+        }
+    };
+
+    window.openClientFromTicket = function (ticketId) {
+        const ticket = findKanbanTicketById(ticketId);
+        if (!ticket) {
+            if (typeof showNotification === 'function') showNotification('Ticket não encontrado.', 'warning');
+            return;
+        }
+
+        const cpf = getCpfFromTicketRecord(ticket, ticketId);
+        let client = null;
+        if (typeof lookupVelodeskClientByCpf === 'function' && cpf.length === 11) {
+            client = lookupVelodeskClientByCpf(cpf);
+        }
+
+        const clientName = (client && client.name) ||
+            ticket.clientName || ticket.solicitante ||
+            (ticket.title || '').split('—').pop().trim() || 'Cliente não identificado';
+
+        let clientTickets = collectClientTickets(cpf, clientName);
+        if (clientTickets.length === 0) clientTickets = [ticket];
+
+        const cpfDisplay = client ? client.cpf : (cpf.length === 11 ? cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '—');
+        const situacao = client ? client.situacao : 'Informe o CPF no formulário lateral';
+        const risco = client ? client.risco : '—';
+        const produtos = client && client.produtos ? client.produtos.join(', ') : '—';
+        const analise = client ? client.analise : 'Consulte o CPF no painel lateral para carregar o cadastro completo.';
+
+        openConfigStyleModal(
+            'Cliente — ' + escapeHtmlEcosystem(clientName),
+            '<div class="client360-profile">' +
+            '<div class="client360-grid">' +
+            '<div class="client360-card"><strong>CPF</strong><span>' + escapeHtmlEcosystem(cpfDisplay) + '</span></div>' +
+            '<div class="client360-card"><strong>Situação</strong><span>' + escapeHtmlEcosystem(situacao) + '</span></div>' +
+            '<div class="client360-card client360-risk"><strong>Risco</strong><span>' + escapeHtmlEcosystem(risco) + '</span></div>' +
+            '</div>' +
+            '<p><strong>Produtos:</strong> ' + escapeHtmlEcosystem(produtos) + '</p>' +
+            '<p class="client360-analise"><i class="fas fa-brain"></i> ' + escapeHtmlEcosystem(analise) + '</p>' +
+            '<h5 class="client360-section-title">Tickets atendidos (' + clientTickets.length + ')</h5>' +
+            '<div class="client360-table-wrap"><table class="client360-table"><thead><tr>' +
+            '<th>Ticket</th><th>Assunto</th><th>Canal</th><th>Status</th><th>Data</th>' +
+            '</tr></thead><tbody>' + renderClientTicketRows(clientTickets) + '</tbody></table></div>' +
+            '</div>',
+            '<button type="button" class="btn-secondary" onclick="closeEcosystemModal()">Fechar</button>'
+        );
+    };
+
     window.openClient360 = function (clientId) {
-        const clients = JSON.parse(localStorage.getItem('velodeskClient360') || '{}');
-        const c = clients[clientId || 'cliente-demo'];
-        if (!c) return;
-        openConfigStyleModal('Histórico 360° — ' + c.name, `
-            <div class="client360-grid">
-                <div class="client360-card"><strong>NPS</strong><span class="client360-nps">${c.nps}/10</span></div>
-                <div class="client360-card"><strong>Canal preferido</strong><span>${c.preferredChannel}</span></div>
-                <div class="client360-card client360-risk"><strong>Risco IA</strong><span>${c.riskScore}%</span></div>
-            </div>
-            <p><strong>Produtos:</strong> ${c.products.join(', ')}</p>
-            <h5>Últimos atendimentos (omnichannel)</h5>
-            <table class="client360-table"><thead><tr><th>Ticket</th><th>Assunto</th><th>Canal</th><th>Status</th><th>Data</th></tr></thead>
-            <tbody>${c.tickets.map(t => `<tr><td>#${t.id}</td><td>${t.subject}</td><td>${t.channel}</td><td>${t.status}</td><td>${t.date}</td></tr>`).join('')}</tbody></table>
-        `);
+        const columns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
+        let first = null;
+        columns.some(function (box) {
+            return (box.tickets || []).some(function (t) {
+                first = t;
+                return true;
+            });
+        });
+        if (first) openClientFromTicket(first.id);
+        else if (typeof showNotification === 'function') showNotification('Nenhum ticket disponível.', 'info');
     };
 
     /* ─── Monitoria ─── */
@@ -824,16 +1383,33 @@
     }
     window.syncChromeTopOffset = syncChromeTopOffset;
 
+    function ensureDeskAgentUser() {
+        try {
+            const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+            if (!user.name) {
+                localStorage.setItem('currentUser', JSON.stringify({
+                    id: 1,
+                    name: 'Ana Silva',
+                    email: 'ana.silva@velodesk.demo',
+                    role: 'agent'
+                }));
+            }
+        } catch (e) { /* noop */ }
+    }
+
     /* ─── Init & hooks ─── */
     window.initVelodeskEcosystem = function () {
         seedEcosystemData();
+        ensureDeskAgentUser();
         if (typeof window.seedDemoTickets === 'function') {
             window.seedDemoTickets({ force: true, replaceAll: true });
         }
         injectPrototypeBanner();
         initGlobalAIReview();
+        initClientTicketAiSuggestions();
         applyProfileUI();
         renderWorkspace360();
+        tryAutoOpenSmartTicket();
 
         const origNavigate = window.navigateToPage;
         if (origNavigate && !window._ecoNavHooked) {

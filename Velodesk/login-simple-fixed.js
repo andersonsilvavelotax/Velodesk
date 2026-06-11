@@ -132,10 +132,9 @@ function loadBoxes() {
         kanbanColumns = [
             { id: 'novos', name: 'Novos', tickets: [] },
             { id: 'em-andamento', name: 'Em Andamento', tickets: [] },
-            { id: 'em-espera', name: 'Em Espera', tickets: [] },
-            { id: 'pendentes', name: 'Pendentes', tickets: [] },
-            { id: 'resolvidos', name: 'Resolvidos', tickets: [] },
-            { id: 'em-aberto', name: 'Em Aberto', tickets: [] }
+            { id: 'em-espera', name: 'Pendente', tickets: [] },
+            { id: 'pendentes', name: 'Aguardando retorno', tickets: [] },
+            { id: 'resolvidos', name: 'Resolvidos', tickets: [] }
         ];
         localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
     }
@@ -265,6 +264,16 @@ function renderTickets() {
         const responsible = getResponsibleAgentName(ticket.responsibleAgent || ticket.responsible || ticket.responsibleName) || 'Não atribuído';
         const group = ticket.group || ticket.attendanceGroup || 'Não definido';
         
+        const cpfRaw = (ticket.lateralForm && ticket.lateralForm.cpf) || ticket.clientCPF || '';
+        const clientName = ticket.clientName || ticket.solicitante || '';
+        ticketElement.setAttribute('data-search', [
+            ticket.id,
+            ticket.title || '',
+            ticket.description || '',
+            clientName,
+            cpfRaw
+        ].join(' ').toLowerCase());
+
         ticketElement.innerHTML = `
             <div class="ticket-slim-header">
                 <div class="ticket-slim-title">
@@ -471,6 +480,109 @@ const openTicketTabs = new Map();
 let lastActiveTicketsTab = 'list';
 
 window.openTicketTabs = openTicketTabs;
+
+const VELO_STATUS_LABELS = {
+    novo: 'Novo',
+    'em-aberto': 'Em Andamento',
+    'em-espera': 'Pendente',
+    pendente: 'Aguardando retorno',
+    resolvido: 'Resolvido'
+};
+
+const VELO_STATUS_COLORS = {
+    novo: '#1976d2',
+    'em-aberto': '#28a745',
+    'em-espera': '#f59e0b',
+    pendente: '#ffc107',
+    resolvido: '#6c757d'
+};
+
+function getVeloStatusLabel(status) {
+    return VELO_STATUS_LABELS[status] || status;
+}
+
+function getVeloStatusColor(status) {
+    return VELO_STATUS_COLORS[status] || '#666';
+}
+
+function renderTicketMacrosBarHTML() {
+    const macros = window.VelodeskMACROS || [];
+    if (!macros.length) return '';
+    return macros.map(function (m) {
+        return '<button type="button" class="ticket-macro-btn" onclick="insertMacro(\'' + m.key + '\')" title="' + m.key + ' — ' + m.title + '"><kbd>' + m.key + '</kbd> ' + m.title + '</button>';
+    }).join('');
+}
+
+function updateTicketTabUIPartial(ticketId, ticket, statusName, status, statusColor) {
+    const tabContent = document.getElementById('tab-ticket-' + ticketId);
+    if (!tabContent) return;
+
+    const mainCol = tabContent.querySelector('.ticket-tab-main-column');
+    const sidebar = tabContent.querySelector('.velo-lateral-form-sidebar');
+    const savedMainScroll = mainCol ? mainCol.scrollTop : 0;
+    const savedSideScroll = sidebar ? sidebar.scrollTop : 0;
+
+    tabContent.querySelectorAll('.current-status .status-indicator').forEach(function (el) {
+        el.style.backgroundColor = statusColor;
+    });
+    tabContent.querySelectorAll('.status-text').forEach(function (el) {
+        el.textContent = statusName + ' #' + ticketId;
+    });
+    const metaStatus = tabContent.querySelector('.meta-value.status-' + status);
+    if (metaStatus) metaStatus.textContent = statusName;
+
+    const timeline = document.getElementById('timeline-' + ticketId);
+    if (timeline) timeline.innerHTML = generateTimelineHTML(ticket);
+
+    const lateralPanel = tabContent.querySelector('.velo-lateral-form-panel[data-ticket-id="' + ticketId + '"]');
+    if (lateralPanel) {
+        const atr = lateralPanel.querySelector('[data-lf-key="atribuido"]');
+        if (atr) atr.value = ticket.group || ticket.attendanceGroup || atr.value;
+        const phaseTag = lateralPanel.querySelector('.velo-lf-field--atribuido .velo-lf-auto-tag');
+        if (phaseTag) phaseTag.innerHTML = '<i class="fas fa-layer-group"></i> Fase: ' + status;
+    }
+
+    const sendButton = document.querySelector('button[onclick*="toggleStatusDropdownInTab(\'' + ticketId + '\')"]');
+    if (sendButton) sendButton.innerHTML = 'Enviar como: ' + statusName + ' <i class="fas fa-chevron-down"></i>';
+
+    setTimeout(function () {
+        if (typeof bindTicketLateralFormEvents === 'function') bindTicketLateralFormEvents(parseInt(ticketId, 10));
+        if (mainCol) mainCol.scrollTop = savedMainScroll;
+        if (sidebar) sidebar.scrollTop = savedSideScroll;
+    }, 60);
+}
+
+function handleGlobalHeaderSearch() {
+    navigateToPage('tickets');
+    setTimeout(function () {
+        const searchTicketsInput = document.getElementById('searchTickets');
+        if (searchTicketsInput) searchTicketsInput.focus();
+    }, 200);
+}
+
+function toggleVelodeskDarkMode() {
+    const isDark = document.body.classList.toggle('velodesk-dark');
+    localStorage.setItem('velodeskDarkMode', isDark ? '1' : '0');
+    const btn = document.getElementById('velodeskThemeToggle');
+    if (btn) {
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+}
+
+function initVelodeskTheme() {
+    if (localStorage.getItem('velodeskDarkMode') === '1') {
+        document.body.classList.add('velodesk-dark');
+        const btn = document.getElementById('velodeskThemeToggle');
+        if (btn) {
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = 'fas fa-sun';
+        }
+    }
+}
+
+window.handleGlobalHeaderSearch = handleGlobalHeaderSearch;
+window.toggleVelodeskDarkMode = toggleVelodeskDarkMode;
 
 function openTicket(ticketId) {
     const ticketsPage = document.getElementById('tickets');
@@ -715,25 +827,8 @@ function createTicketTab(ticket, box) {
     tabContent.className = 'ticket-tab-content';
     tabContent.id = `tab-${tabId}`;
     
-    // Mapear status
-    const statusNames = {
-        'novo': 'Novo',
-        'em-aberto': 'Em Andamento',
-        'em-espera': 'Em Espera',
-        'pendente': 'Pendente',
-        'resolvido': 'Resolvido'
-    };
-    
-    const statusColors = {
-        'novo': '#1976d2',
-        'em-aberto': '#28a745',
-        'em-espera': '#000000',
-        'pendente': '#ffc107',
-        'resolvido': '#6c757d'
-    };
-    
-    const statusName = statusNames[ticket.status] || ticket.status;
-    const statusColor = statusColors[ticket.status] || '#666';
+    const statusName = getVeloStatusLabel(ticket.status);
+    const statusColor = getVeloStatusColor(ticket.status);
     
     tabContent.innerHTML = generateTicketTabHTML(ticket, statusName, statusColor);
     tabsContent.appendChild(tabContent);
@@ -766,12 +861,12 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                         ${ticket.isNewTicket ? 
                             `<div class="new-ticket-header">
                                 <div class="form-group">
-                                    <label for="ticketTitleInput-${ticket.id}">Título do Ticket:</label>
-                                    <input type="text" id="ticketTitleInput-${ticket.id}" class="form-input ticket-title-input" placeholder="Digite o título do ticket..." value="${ticket.title}">
+                                    <label for="ticketTitleInput-${ticket.id}">Título (visão do agente):</label>
+                                    <input type="text" id="ticketTitleInput-${ticket.id}" class="form-input ticket-title-input" placeholder="Resumo interno — ex.: Lentidão fibra · Maria Oliveira" value="${ticket.title}">
                                 </div>
                                 <div class="form-group">
-                                    <label for="ticketDescriptionInput-${ticket.id}">Descrição:</label>
-                                    <textarea id="ticketDescriptionInput-${ticket.id}" class="form-textarea" rows="4" placeholder="Descreva o problema ou solicitação...">${ticket.description}</textarea>
+                                    <label for="ticketDescriptionInput-${ticket.id}">Descrição (registro do agente):</label>
+                                    <textarea id="ticketDescriptionInput-${ticket.id}" class="form-textarea" rows="4" placeholder="Contexto para a equipe. O cliente recebe apenas a resposta pública enviada.">${ticket.description}</textarea>
                                 </div>
                             </div>` :
                             `<div class="ticket-status-info">
@@ -829,7 +924,8 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                                     <div class="response-tab-content active" id="public-${ticket.id}">
                                         <div class="response-form">
                                             <textarea class="response-textarea" id="publicResponse-${ticket.id}" placeholder="Digite sua resposta ao cliente..." rows="5"></textarea>
-                                            <div class="response-actions">
+                                            <div class="response-actions ticket-response-actions">
+                                                <div class="ticket-inline-macros">${renderTicketMacrosBarHTML()}</div>
                                                 <button type="button" class="btn-secondary" onclick="openAIChatbot()">
                                                     <i class="fas fa-robot"></i> Assistente IA
                                                 </button>
@@ -858,9 +954,7 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
             </div>
             
             <!-- Rodapé Fixo -->
-            <div class="ticket-tab-footer-fixed">
-                <div class="ticket-tab-footer-left">
-                </div>
+            <div class="ticket-tab-footer-fixed ticket-tab-footer-fixed--end">
                 <div class="ticket-tab-footer-right">
                     <div class="dropdown-container">
                         <button type="button" class="btn-primary dropdown-btn" onclick="toggleStatusDropdownInTab('${ticket.id}')">
@@ -877,11 +971,11 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                             </div>
                             <div class="dropdown-item" onclick="changeTicketStatusFromTab('${ticket.id}', 'em-espera')">
                                 <span class="status-indicator em-espera"></span>
-                                <span>Em Espera</span>
+                                <span>Pendente</span>
                             </div>
                             <div class="dropdown-item" onclick="changeTicketStatusFromTab('${ticket.id}', 'pendente')">
                                 <span class="status-indicator pendente"></span>
-                                <span>Pendente</span>
+                                <span>Aguardando retorno</span>
                             </div>
                             <div class="dropdown-item" onclick="changeTicketStatusFromTab('${ticket.id}', 'resolvido')">
                                 <span class="status-indicator resolvido"></span>
@@ -911,6 +1005,7 @@ function updateSidebarToggleVisibility() {
 
 // Chamar ao carregar a página para verificar se há tickets abertos
 document.addEventListener('DOMContentLoaded', function() {
+    initVelodeskTheme();
     setTimeout(() => {
         updateSidebarToggleVisibility();
         const ticketsPage = document.getElementById('tickets');
@@ -1256,15 +1351,8 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
     // Salvar no localStorage
     localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
     
-    // Mapear status para nomes
-    const statusNames = {
-        'novo': 'Novo',
-        'em-aberto': 'Em Andamento',
-        'em-espera': 'Em Espera',
-        'pendente': 'Pendente',
-        'resolvido': 'Resolvido'
-    };
-    const statusName = statusNames[newStatus] || newStatus;
+    const statusName = getVeloStatusLabel(newStatus);
+    const statusColor = getVeloStatusColor(newStatus);
     
     // Atualizar timeline na aba
     const timelineContainer = document.getElementById(`timeline-${ticketId}`);
@@ -1296,24 +1384,7 @@ function changeTicketStatusFromTab(ticketId, newStatus) {
             sendButton.innerHTML = `Enviar como: ${statusName} <i class="fas fa-chevron-down"></i>`;
         }
         
-        // Atualizar conteúdo completo da aba com novo status
-        const tabContent = document.getElementById(`tab-ticket-${ticketId}`);
-        if (tabContent) {
-            const statusColors = {
-                'novo': '#1976d2',
-                'em-aberto': '#28a745',
-                'em-espera': '#000000',
-                'pendente': '#ffc107',
-                'resolvido': '#6c757d'
-            };
-            const statusColor = statusColors[newStatus] || '#666';
-            tabContent.innerHTML = generateTicketTabHTML(foundTicket, statusName, statusColor);
-            
-            // Reconfigurar eventos após atualizar o HTML
-            setTimeout(() => {
-                setupTicketTabEvents(ticketId);
-            }, 100);
-        }
+        updateTicketTabUIPartial(ticketId, foundTicket, statusName, newStatus, statusColor);
     }
     
     // Recarregar caixas para atualizar a lista
@@ -1392,25 +1463,8 @@ function createTicketModal(ticket, box) {
     modal.className = 'modal';
     modal.style.display = 'block';
     
-    // Mapear status para cores e nomes
-    const statusNames = {
-        'novo': 'Novo',
-        'em-aberto': 'Em Andamento',
-        'em-espera': 'Em Espera',
-        'pendente': 'Pendente',
-        'resolvido': 'Resolvido'
-    };
-    
-    const statusColors = {
-        'novo': '#1976d2',
-        'em-aberto': '#28a745',
-        'em-espera': '#000000',
-        'pendente': '#ffc107',
-        'resolvido': '#6c757d'
-    };
-    
-    const statusName = statusNames[ticket.status] || ticket.status;
-    const statusColor = statusColors[ticket.status] || '#666';
+    const statusName = getVeloStatusLabel(ticket.status);
+    const statusColor = getVeloStatusColor(ticket.status);
     
     modal.innerHTML = `
         <div class="modal-content ticket-modal">
@@ -1550,11 +1604,11 @@ function createTicketModal(ticket, box) {
                                 </div>
                                 <div class="dropdown-item" onclick="changeTicketStatus('${ticket.id}', 'em-espera')">
                                     <span class="status-indicator em-espera"></span>
-                                    <span>Em Espera</span>
+                                    <span>Pendente</span>
                                 </div>
                                 <div class="dropdown-item" onclick="changeTicketStatus('${ticket.id}', 'pendente')">
                                     <span class="status-indicator pendente"></span>
-                                    <span>Pendente</span>
+                                    <span>Aguardando retorno</span>
                                 </div>
                                 <div class="dropdown-item" onclick="changeTicketStatus('${ticket.id}', 'resolvido')">
                                     <span class="status-indicator resolvido"></span>
@@ -1667,6 +1721,11 @@ function generateTimelineHTML(ticket) {
     
     // Ordenar por timestamp (mais antigo primeiro)
     timelineEntries.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    let lastClientEntryId = null;
+    timelineEntries.forEach(function (entry) {
+        if (entry.type === 'client') lastClientEntryId = entry.id;
+    });
     
     if (timelineEntries.length === 0) {
         return '<p class="no-timeline">Nenhum histórico disponível.</p>';
@@ -1699,6 +1758,15 @@ function generateTimelineHTML(ticket) {
             thumbIcon = 'fa-user';
         }
 
+        let aiSuggestHtml = '';
+        if (
+            entry.type === 'client' &&
+            entry.id === lastClientEntryId &&
+            typeof window.renderVeloClientResponseSuggestionHtml === 'function'
+        ) {
+            aiSuggestHtml = window.renderVeloClientResponseSuggestionHtml(ticket, entry.text);
+        }
+
         const cardHtml = `
                         <article class="octa-comment-card box-bordered-octa">
                             <div class="octa-card-head-row">
@@ -1708,6 +1776,7 @@ function generateTimelineHTML(ticket) {
                                 </header>
                             </div>
                             <div class="octa-comment-text">${escapeHtml(entry.text).replace(/\n/g, '<br>')}</div>
+                            ${aiSuggestHtml}
                         </article>`;
 
         const avatarBlock = `<div class="octa-avatar" title="${authorSafe}">${escapeHtml(avatarLetter)}</div>`;
@@ -1766,26 +1835,12 @@ function getOctaSide(entry) {
 
 // Função para obter nome do status
 function getStatusName(status) {
-    const statusNames = {
-        'novo': 'Novo',
-        'em-aberto': 'Em Andamento',
-        'em-espera': 'Em Espera',
-        'pendente': 'Pendente',
-        'resolvido': 'Resolvido'
-    };
-    return statusNames[status] || status;
+    return getVeloStatusLabel(status);
 }
 
 // Função para obter cor do status
 function getStatusColor(status) {
-    const statusColors = {
-        'novo': '#1976d2',
-        'em-aberto': '#28a745',
-        'em-espera': '#000000',
-        'pendente': '#ffc107',
-        'resolvido': '#6c757d'
-    };
-    return statusColors[status] || '#666';
+    return getVeloStatusColor(status);
 }
 
 // Função para obter label do tipo
@@ -2304,40 +2359,14 @@ function changeTicketStatus(ticketId, newStatus) {
     localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));
     console.log('KanbanColumns salvo no localStorage');
     
-    // Mapear status para nomes
-    const statusNames = {
-        'novo': 'Novo',
-        'em-aberto': 'Em Andamento',
-        'em-espera': 'Em Espera',
-        'pendente': 'Pendente',
-        'resolvido': 'Resolvido'
-    };
-    const statusName = statusNames[newStatus] || newStatus;
+    const statusName = getVeloStatusLabel(newStatus);
+    const statusColor = getVeloStatusColor(newStatus);
     
     // Verificar se o ticket está aberto em uma aba e atualizar
     const tabInfo = openTicketTabs.get(parseInt(ticketId));
     if (tabInfo) {
         tabInfo.ticket = foundTicket;
-        
-        // Atualizar conteúdo da aba se estiver aberta
-        const tabContent = document.getElementById(`tab-ticket-${ticketId}`);
-        if (tabContent) {
-            const statusColors = {
-                'novo': '#1976d2',
-                'em-aberto': '#28a745',
-                'em-espera': '#000000',
-                'pendente': '#ffc107',
-                'resolvido': '#6c757d'
-            };
-            const statusColor = statusColors[newStatus] || '#666';
-            
-            tabContent.innerHTML = generateTicketTabHTML(foundTicket, statusName, statusColor);
-            
-            // Reconfigurar eventos após atualizar o HTML
-            setTimeout(() => {
-                setupTicketTabEvents(ticketId);
-            }, 100);
-        }
+        updateTicketTabUIPartial(ticketId, foundTicket, statusName, newStatus, statusColor);
     }
     
     // Fechar modal
@@ -4373,30 +4402,24 @@ function renderFormFieldForTicket(field) {
 
 // Função para buscar tickets
 function searchTickets() {
-    const searchTerm = document.getElementById('searchTickets').value.toLowerCase();
+    const searchInput = document.getElementById('searchTickets');
+    const searchTerm = (searchInput && searchInput.value || '').toLowerCase().trim();
     const ticketsList = document.getElementById('ticketsList');
     
     if (!ticketsList) return;
     
-    // Buscar tanto tickets antigos (.ticket-item) quanto novos (.ticket-item-slim)
     const ticketItems = ticketsList.querySelectorAll('.ticket-item, .ticket-item-slim');
     
     if (searchTerm === '') {
-        // Mostrar todos os tickets
-        ticketItems.forEach(item => {
-            item.style.display = 'flex';
-            if (item.classList.contains('ticket-item-slim')) {
-                item.style.display = 'flex';
-            }
-        });
+        ticketItems.forEach(item => { item.style.display = 'flex'; });
         return;
     }
     
     ticketItems.forEach(item => {
+        const dataSearch = item.getAttribute('data-search') || '';
         let title = '';
         let description = '';
         
-        // Verificar se é ticket fino (novo) ou antigo
         if (item.classList.contains('ticket-item-slim')) {
             title = item.querySelector('.ticket-slim-title h5')?.textContent.toLowerCase() || '';
             description = item.querySelector('.ticket-slim-description')?.textContent.toLowerCase() || '';
@@ -4405,11 +4428,10 @@ function searchTickets() {
             description = item.querySelector('.ticket-description')?.textContent.toLowerCase() || '';
         }
         
-        if (title.includes(searchTerm) || description.includes(searchTerm)) {
-            item.style.display = 'flex';
-        } else {
-            item.style.display = 'none';
-        }
+        const match = dataSearch.includes(searchTerm) ||
+            title.includes(searchTerm) ||
+            description.includes(searchTerm);
+        item.style.display = match ? 'flex' : 'none';
     });
 }
 
@@ -4499,10 +4521,9 @@ function forceCreateKanbanBoxes() {
     const kanbanColumns = [
         { id: 'novos', name: 'Novos', tickets: [] },
         { id: 'em-andamento', name: 'Em Andamento', tickets: [] },
-        { id: 'em-espera', name: 'Em Espera', tickets: [] },
-        { id: 'pendentes', name: 'Pendentes', tickets: [] },
-        { id: 'resolvidos', name: 'Resolvidos', tickets: [] },
-        { id: 'em-aberto', name: 'Em Aberto', tickets: [] }
+        { id: 'em-espera', name: 'Pendente', tickets: [] },
+        { id: 'pendentes', name: 'Aguardando retorno', tickets: [] },
+        { id: 'resolvidos', name: 'Resolvidos', tickets: [] }
     ];
     
     localStorage.setItem('kanbanColumns', JSON.stringify(kanbanColumns));

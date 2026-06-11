@@ -5,11 +5,23 @@
     box-sizing: border-box;
 }
 
+html {
+    height: 100%;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: var(--light-gray);
     color: var(--primary-blue);
     line-height: 1.6;
+    min-height: 100%;
+}
+
+/* Sem rolagem na página — scroll só nas colunas internas (tickets, chat, etc.) */
+body:has(.main-app[style*="grid"]) {
+    overflow: hidden;
+    height: 100%;
+    max-height: 100vh;
 }
 
 /* Cores do tema */
@@ -200,12 +212,13 @@ body {
 /* Layout principal */
 .main-app {
     display: grid;
-    grid-template-areas: 
-        "header header"
-        "content content";
+    grid-template-areas: "content";
     grid-template-columns: 1fr;
-    grid-template-rows: 60px 1fr;
-    min-height: 100vh;
+    grid-template-rows: 1fr;
+    height: 100vh;
+    max-height: 100vh;
+    min-height: 0;
+    overflow: hidden;
     transition: all 0.3s ease;
     background: var(--light-gray);
 }
@@ -219,7 +232,7 @@ body {
 
 /* Header */
 .header {
-    grid-area: header;
+    grid-area: unset;
     background: var(--primary-blue);
     border-bottom: 1px solid var(--secondary-blue);
     display: flex;
@@ -450,10 +463,13 @@ body {
     grid-area: content;
     background: var(--light-gray);
     padding: 0;
-    overflow-y: auto;
+    overflow: hidden;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
     transition: margin-left 0.3s ease, background 0.3s ease;
     margin-left: 250px; /* Espaço para o sidebar fixo */
-    margin-top: var(--velo-chrome-top);
+    margin-top: 0;
 }
 
 /* Remover background e margin-top quando páginas principais estiverem ativas */
@@ -476,6 +492,14 @@ body {
     overflow-y: auto !important;
 }
 
+/* Páginas com conteúdo longo: rolagem só no main-content, não no body */
+.main-content:has(.page.active:not(#tickets):not(#chat):not(#config)) {
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: var(--velo-chrome-top);
+    box-sizing: border-box;
+}
+
 /* Ajustar padding apenas para páginas que não são tickets, chat, reports ou config */
 .main-content .page:not(#tickets):not(#chat):not(#reports):not(#config) {
     padding: 0.5rem 1rem;
@@ -496,28 +520,32 @@ body.has-ticket-tabs-visible {
     background: transparent !important;
     position: relative;
     z-index: 10;
-    height: 100vh;
-    max-height: 100vh;
+    height: 100%;
+    max-height: 100%;
     box-sizing: border-box;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
 }
 
 .main-content #tickets {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    padding-top: 0 !important;
+    padding-top: var(--velo-chrome-top) !important;
     padding-bottom: 0 !important;
     background: transparent !important;
     position: relative;
     z-index: 10;
-    height: 100vh;
-    max-height: 100vh;
+    height: 100%;
+    max-height: 100%;
     box-sizing: border-box;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
 }
 
 /* Relatórios: permite rolagem vertical; conteúdo pode ultrapassar a viewport */
@@ -538,12 +566,12 @@ body.has-ticket-tabs-visible {
     flex-direction: column;
 }
 
-/* Garantir que o tickets-layout fique rente ao header; desce só com guias abertas */
+/* Área de tickets: abaixo do header fixo + guias; scroll só nas colunas internas */
 #tickets .tickets-layout,
 #tickets .ticket-tabs-content {
-    margin-top: calc(var(--velo-chrome-top) + var(--velo-tickets-content-gap));
-    height: calc(100vh - var(--velo-chrome-top) - var(--velo-tickets-content-gap));
-    max-height: calc(100vh - var(--velo-chrome-top) - var(--velo-tickets-content-gap));
+    margin-top: var(--velo-tickets-content-gap);
+    height: calc(100% - var(--velo-tickets-content-gap));
+    max-height: calc(100% - var(--velo-tickets-content-gap));
     flex: 1 1 0;
     min-height: 0;
     transition: margin-top 0.22s ease, height 0.22s ease, max-height 0.22s ease;
@@ -555,9 +583,9 @@ body.has-ticket-tabs-visible {
 
 body.has-ticket-tabs-visible #tickets .tickets-layout,
 body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
-    margin-top: calc(var(--velo-chrome-top) + var(--velo-ticket-tabs-height) + var(--velo-tickets-content-gap));
-    height: calc(100vh - var(--velo-chrome-top) - var(--velo-ticket-tabs-height) - var(--velo-tickets-content-gap));
-    max-height: calc(100vh - var(--velo-chrome-top) - var(--velo-ticket-tabs-height) - var(--velo-tickets-content-gap));
+    margin-top: calc(var(--velo-ticket-tabs-height) + var(--velo-tickets-content-gap));
+    height: calc(100% - var(--velo-ticket-tabs-height) - var(--velo-tickets-content-gap));
+    max-height: calc(100% - var(--velo-ticket-tabs-height) - var(--velo-tickets-content-gap));
 }
 
 /* Com aba de ticket aberta: barra fixa no topo e área de conteúdo preenche o restante (scroll suave na coluna lateral) */
@@ -1043,7 +1071,8 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
     position: fixed;
     bottom: 0;
     left: 250px;
-    right: 0;
+    /* Não cobre o formulário lateral — só a coluna principal */
+    right: calc(var(--velo-ticket-lateral-width, clamp(280px, 32vw, 380px)) + 2.4rem);
     background: var(--white);
     border-top: 2px solid #e9ecef;
     padding: 0.65rem 1.5rem;
@@ -1058,6 +1087,10 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
 
 .main-app.sidebar-collapsed .ticket-tab-footer-fixed {
     left: 60px;
+}
+
+.ticket-tab-footer-fixed.ticket-tab-footer-fixed--end {
+    justify-content: flex-end;
 }
 
 .ticket-tab-footer-left {
@@ -2601,7 +2634,7 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
 }
 
 .status-indicator.em-espera {
-    background: #000000;
+    background: #f59e0b;
 }
 
 .status-indicator.pendente {
@@ -3137,11 +3170,11 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
     background: #f4f6f9;
     border-bottom: 1px solid #c8ccd2;
     padding: 0 0.65rem;
-    min-height: 34px;
+    min-height: var(--velo-ticket-tabs-height, 34px);
     display: none;
     gap: 0.15rem;
     overflow-x: auto;
-    z-index: 250;
+    z-index: 280;
     align-items: flex-end;
     scrollbar-width: thin;
     box-shadow: 0 1px 2px rgba(0, 0, 88, 0.05);
@@ -3365,7 +3398,7 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
     flex: 1 1 0;
     min-height: 0;
     background: linear-gradient(180deg, #f0f2f5 0%, #e8eaed 100%);
-    padding: 0.85rem 1.15rem 1rem;
+    padding: 0.85rem 1.15rem 0.85rem;
     position: relative;
     width: 100%;
     max-width: 1800px;
@@ -9624,19 +9657,17 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
     }
 }
 
-/* Correção para imagem cortada na página de tickets */
-.tickets-layout {
-    height: calc(100vh - 120px) !important;
-    min-height: 500px;
-}
-
+/* Lista de tickets: rolagem só na lista, não na página */
 .tickets-panel {
-    overflow: visible !important;
+    overflow: hidden !important;
+    min-height: 0;
 }
 
 .tickets-list {
-    max-height: calc(100vh - 200px);
+    flex: 1 1 0;
+    min-height: 0;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 /* Responsividade para página de tickets */
@@ -15030,5 +15061,200 @@ input:checked + .slider:before {
     #config .config-welcome-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ===== Header global: busca, registro rápido, tema ===== */
+.header-global-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 0.35rem 0.75rem;
+    min-width: 220px;
+    max-width: 320px;
+}
+
+.header-global-search i {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.85rem;
+}
+
+.header-global-search input {
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 0.85rem;
+    width: 100%;
+    outline: none;
+}
+
+.header-global-search input::placeholder {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.btn-header-quick,
+.btn-header-theme {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-header-quick:hover,
+.btn-header-theme:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.btn-header-theme {
+    padding: 0.45rem 0.65rem;
+}
+
+/* Macros na área de tickets */
+.ticket-footer-macros,
+.ticket-inline-macros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.ticket-macro-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: #f8f9fa;
+    color: #1e293b;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.ticket-macro-btn:hover {
+    border-color: var(--accent-blue);
+    background: #eef2ff;
+}
+
+.ticket-macro-btn kbd {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    background: var(--primary-blue);
+    color: #fff;
+}
+
+.ticket-response-actions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* Botão cliente dentro do ticket */
+.ticket-header-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.btn-ticket-client {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.85rem;
+    border: 1px solid rgba(79, 110, 247, 0.35);
+    border-radius: 8px;
+    background: rgba(79, 110, 247, 0.08);
+    color: #1a3fd4;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+    flex-shrink: 0;
+}
+
+.btn-ticket-client:hover {
+    background: rgba(79, 110, 247, 0.16);
+    border-color: #4f6ef7;
+    transform: translateY(-1px);
+}
+
+.btn-ticket-client i {
+    font-size: 1rem;
+}
+
+/* Busca na página de tickets */
+.tickets-panel-header .ticket-filters {
+    flex: 1;
+    justify-content: flex-end;
+    gap: 0.65rem;
+}
+
+.tickets-page-search input {
+    width: min(320px, 42vw);
+    min-width: 180px;
+}
+
+.tickets-page-search input[type="search"] {
+    padding-right: 2rem;
+}
+
+/* Modo escuro nativo */
+body.velodesk-dark {
+    --light-gray: #0f172a;
+    --white: #1e293b;
+    color: #e2e8f0;
+    background-color: #0f172a;
+}
+
+body.velodesk-dark .header {
+    background: #0b1220;
+    border-bottom-color: #1e293b;
+}
+
+body.velodesk-dark .sidebar {
+    background: #111827;
+}
+
+body.velodesk-dark .ticket-tab-footer-fixed,
+body.velodesk-dark .ticket-tab-content,
+body.velodesk-dark .velo-lateral-form-sidebar,
+body.velodesk-dark .ws-panel {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+}
+
+body.velodesk-dark .form-input,
+body.velodesk-dark .form-textarea {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+body.velodesk-dark .ticket-macro-btn {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+@media (max-width: 900px) {
+    .btn-header-quick span { display: none; }
+    .header-global-search { min-width: 140px; }
 }
 

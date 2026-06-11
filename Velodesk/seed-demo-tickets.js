@@ -7,6 +7,7 @@
             name: 'Maria Oliveira',
             title: 'Internet lenta após 22h — Maria Oliveira',
             description: 'Cliente relata queda de velocidade no período noturno. Fibra 500MB contratada.',
+            clientMessage: 'Boa noite! Minha internet fica muito lenta depois das 22h. Tenho fibra de 500MB e no speed test cai para menos de 50MB. Podem verificar?',
             status: 'novo',
             boxId: 'novos',
             source: 'WhatsApp',
@@ -23,6 +24,7 @@
             name: 'João Pereira',
             title: 'Bloqueio por inadimplência — João Pereira',
             description: 'Cliente contesta bloqueio do combo móvel. Solicita negociação de débitos.',
+            clientMessage: 'Meu combo móvel foi bloqueado e eu já tinha feito acordo de pagamento pelo portal. Preciso desbloquear urgente e negociar o que ficou em aberto.',
             status: 'em-aberto',
             boxId: 'em-andamento',
             source: 'Portal',
@@ -39,6 +41,7 @@
             name: 'Empresa Tech Ltda',
             title: 'Upgrade link dedicado — Empresa Tech Ltda',
             description: 'CNPJ solicita upgrade de link corporativo e revisão contratual.',
+            clientMessage: 'Somos a Empresa Tech Ltda e precisamos de upgrade do link dedicado corporativo. Podem enviar proposta com revisão contratual?',
             status: 'pendente',
             boxId: 'pendentes',
             source: 'E-mail',
@@ -55,10 +58,9 @@
         return [
             { id: 'novos', name: 'Novos', tickets: [] },
             { id: 'em-andamento', name: 'Em Andamento', tickets: [] },
-            { id: 'em-espera', name: 'Em Espera', tickets: [] },
-            { id: 'pendentes', name: 'Pendentes', tickets: [] },
-            { id: 'resolvidos', name: 'Resolvidos', tickets: [] },
-            { id: 'em-aberto', name: 'Em Aberto', tickets: [] }
+            { id: 'em-espera', name: 'Pendente', tickets: [] },
+            { id: 'pendentes', name: 'Aguardando retorno', tickets: [] },
+            { id: 'resolvidos', name: 'Resolvidos', tickets: [] }
         ];
     }
 
@@ -119,10 +121,16 @@
         localStorage.setItem('velodeskClientDB', JSON.stringify(db));
     }
 
+    function buildClientMessage(client) {
+        if (client.clientMessage) return client.clientMessage;
+        return client.description;
+    }
+
     function buildTicket(client, index, baseId) {
         const now = new Date();
         const createdAt = new Date(now.getTime() - (index + 1) * 86400000).toISOString();
         const agent = 'Ana Silva';
+        const clientText = buildClientMessage(client);
         return {
             id: baseId + index,
             title: client.title,
@@ -131,9 +139,17 @@
             priority: client.priority,
             channel: client.channel,
             source: client.source,
+            openedBy: 'client',
             createdAt,
             updatedAt: now.toISOString(),
-            messages: [],
+            messages: [{
+                id: 'client-msg-' + index,
+                fromClient: true,
+                type: 'client',
+                text: clientText,
+                timestamp: createdAt,
+                author: client.name
+            }],
             internalNotes: [],
             solicitante: client.name,
             clientName: client.name,
