@@ -41,6 +41,7 @@ for %%F in (
     velodesk-crm.js
     velodesk-desk-v2.js
     cockpit.css
+    cockpit-sidebar-unified.css
     cockpit-crm-ui.css
     cockpit-crm-ui.js
     velotax-theme.css

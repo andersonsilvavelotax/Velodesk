@@ -32,6 +32,9 @@ function navigateToPage(page) {
 
     if (deskV2Active && page === 'tickets' && typeof deskV2.restore === 'function') {
         if (deskV2.restore()) {
+            if (typeof syncMainSidebarNav === 'function') {
+                syncMainSidebarNav('tickets');
+            }
             return;
         }
     }
@@ -123,6 +126,10 @@ function navigateToPage(page) {
 
     if (typeof updateTicketsTabsChrome === 'function') {
         updateTicketsTabsChrome();
+    }
+
+    if (typeof syncMainSidebarNav === 'function') {
+        syncMainSidebarNav(page);
     }
 }
 
@@ -1058,7 +1065,10 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
 // Função para atualizar visibilidade do botão de toggle do sidebar
 function updateSidebarToggleVisibility() {
     const toggleBtn = document.querySelector('.sidebar-toggle-btn');
-    if (toggleBtn) toggleBtn.style.display = 'flex';
+    const sidebar = document.getElementById('mainSidebar');
+    if (toggleBtn) {
+        toggleBtn.style.display = (sidebar && sidebar.classList.contains('velo-nav-rail')) ? 'none' : 'flex';
+    }
 }
 
 // Chamar ao carregar a página para verificar se há tickets abertos
@@ -15031,9 +15041,31 @@ function filterConversationsByAgent(agentId) {
 
 // ==================== FUNCIONALIDADE DE RECOLHER/EXPANDIR SIDEBAR ====================
 
+function syncMainSidebarNav(page) {
+    document.querySelectorAll('#mainSidebar .nav-item[data-page]').forEach(function (item) {
+        item.classList.toggle('active', item.getAttribute('data-page') === page);
+    });
+}
+
+function syncSidebarProfileInitials() {
+    var el = document.querySelector('#mainSidebar .sidebar-profile-initials');
+    if (!el) return;
+    try {
+        var user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        var name = user.name || 'Ana Silva';
+        var parts = name.trim().split(/\s+/);
+        el.textContent = parts.length >= 2
+            ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+            : name.slice(0, 2).toUpperCase();
+    } catch (e) {
+        el.textContent = 'AS';
+    }
+}
+
 // Função para recolher/expandir o sidebar
 function toggleSidebar() {
     const sidebar = document.getElementById('mainSidebar');
+    if (sidebar && sidebar.classList.contains('velo-nav-rail')) return;
     const mainApp = document.querySelector('.main-app');
     const mainContent = document.querySelector('.main-content');
     const toggleBtn = document.querySelector('.sidebar-toggle-btn i');
@@ -15081,6 +15113,16 @@ function restoreSidebarState() {
     const toggleBtn = document.querySelector('.sidebar-toggle-btn i');
     
     if (!sidebar) return;
+
+    document.body.classList.add('velo-nav-rail-mode');
+
+    if (sidebar.classList.contains('velo-nav-rail')) {
+        sidebar.classList.add('collapsed');
+        if (mainApp) mainApp.classList.add('sidebar-collapsed');
+        if (mainContent) mainContent.classList.add('sidebar-collapsed');
+        syncSidebarProfileInitials();
+        return;
+    }
     
     const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
     

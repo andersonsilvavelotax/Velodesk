@@ -570,17 +570,6 @@
 
     function getShellHtml() {
         return '<div class="app-shell">' +
-            '<aside class="crm-sidebar" aria-label="Navegação">' +
-            '<div class="crm-sidebar__logo" title="Velodesk">V</div>' +
-            '<nav class="crm-sidebar__nav">' +
-            '<button type="button" class="crm-nav-icon is-active" title="Tickets" data-nav="tickets"><i class="ti ti-ticket"></i></button>' +
-            '<button type="button" class="crm-nav-icon" title="Mensagens"><i class="ti ti-message-2"></i><span class="crm-nav-icon__badge"></span></button>' +
-            '<button type="button" class="crm-nav-icon" title="Dashboard" data-nav="dashboard"><i class="ti ti-layout-dashboard"></i></button>' +
-            '<button type="button" class="crm-nav-icon" title="Relatórios"><i class="ti ti-chart-bar"></i></button>' +
-            '<button type="button" class="crm-nav-icon" title="Configurações" data-nav="settings"><i class="ti ti-settings"></i></button>' +
-            '<button type="button" class="crm-nav-icon" title="IA"><i class="ti ti-robot"></i></button>' +
-            '</nav><div class="crm-sidebar__avatar" title="Ana Silva">AS</div></aside>' +
-
             '<aside class="queue-panel" id="crmQueuePanel">' +
             '<div class="queue-panel__inner">' +
             '<div class="queue-panel__header">' +
@@ -1064,26 +1053,7 @@
     }
 
     function getMainTicketHtml(ticketId) {
-        return '<div class="crm-client-profile-bar">' +
-            '<section class="ticket-client-profile ticket-client-profile--compact" id="ticketClientProfile" aria-label="Perfil do cliente">' +
-            '<div class="ticket-client-profile__row ticket-client-profile__row--top">' +
-            '<span class="ticket-client-profile__name-wrap" id="headerInfo">' +
-            '<strong class="ticket-client-profile__name" id="profileName"></strong>' +
-            '<button type="button" class="crm-edit-client-btn" id="btnEditClient" title="Editar contato" aria-expanded="false" aria-controls="clientEditPopover">' +
-            '<i class="ti ti-pencil"></i></button>' +
-            getClientEditPopoverHtml() +
-            '</span>' +
-            '<span class="ticket-client-profile__contact"><i class="fas fa-envelope"></i> <span id="profileEmail"></span></span>' +
-            '<span class="ticket-client-profile__contact"><i class="fas fa-phone"></i> <span id="profilePhone"></span></span>' +
-            '</div>' +
-            '<div class="ticket-client-profile__row ticket-client-profile__row--bottom">' +
-            '<span class="ticket-client-profile__cpf"><span class="ticket-client-profile__label">CPF</span> <span id="profileCpf"></span></span>' +
-            '<span class="ticket-client-profile__products" id="profileProducts"></span>' +
-            '</div>' +
-            '<button type="button" class="btn-secondary btn-sm ticket-client-history-btn" id="btnClientHistory">' +
-            '<i class="fas fa-history"></i> Histórico de tickets</button>' +
-            '</section></div>' +
-            '<nav class="tabs-top" aria-label="Navegação do ticket">' +
+        return '<nav class="tabs-top" aria-label="Navegação do ticket">' +
             '<button type="button" class="tab-btn' + (state.mainTab === 'conversa' ? ' is-active' : '') + '" data-main-tab="conversa">' +
             '<i class="ti ti-message-2"></i> Conversa</button>' +
             '<button type="button" class="tab-btn' + (state.mainTab === 'notas' ? ' is-active' : '') + '" data-main-tab="notas">' +
@@ -1183,7 +1153,7 @@
         closeSendStatusMenu();
 
         stripComposeAiReview();
-        populateClientProfile(t, client);
+        removeFocusContextPanel();
 
         var conv = $('#conversation');
         if (conv) {
@@ -1237,6 +1207,7 @@
         bindMainEvents(entry, iaReply);
         closeClientEditPopover();
         closeSendStatusMenu();
+        removeFocusContextPanel();
     }
 
     function stripComposeAiReview() {
@@ -1776,30 +1747,12 @@
             };
         }
 
-        var navDash = $('#velodeskDeskV2Root [data-nav="dashboard"]');
-        if (navDash) {
-            navDash.onclick = function () {
-                hideDeskV2ForLegacyNav();
-                if (typeof navigateToPage === 'function') navigateToPage('dashboard');
-            };
-        }
-
-        var navTickets = $('#velodeskDeskV2Root [data-nav="tickets"]');
-        if (navTickets) {
-            navTickets.onclick = function () {
-                restoreDeskV2();
-            };
-        }
-
-        $$('#velodeskDeskV2Root [data-nav="settings"]').forEach(function (btn) {
-            btn.onclick = function () {
-                hideDeskV2ForLegacyNav();
-                if (typeof navigateToPage === 'function') navigateToPage('config');
-            };
-        });
-
         bindPanelCollapseEvents();
         applyPanelCollapseState();
+
+        if (typeof syncMainSidebarNav === 'function') {
+            syncMainSidebarNav('tickets');
+        }
     }
 
     function setQueuePanelCollapsed(collapsed) {
@@ -1872,6 +1825,11 @@
         return any.length ? any[0].ticket.id : null;
     }
 
+    function removeFocusContextPanel() {
+        var panel = document.getElementById('cockpitFocusContext');
+        if (panel) panel.remove();
+    }
+
     function patchEcosystemForDeskV2() {
         if (window.__velodeskDeskV2EcosystemPatched) return;
         window.__velodeskDeskV2EcosystemPatched = true;
@@ -1903,6 +1861,7 @@
     function restoreDeskV2() {
         if (!isDeskV2Mode()) return false;
 
+        removeFocusContextPanel();
         document.body.classList.add('desk-v2-mode');
         document.title = 'Velodesk CRM — Cockpit';
 
@@ -1915,6 +1874,10 @@
         root.style.display = '';
         renderQueueList();
         renderTicketCards();
+
+        if (typeof syncMainSidebarNav === 'function') {
+            syncMainSidebarNav('tickets');
+        }
 
         if (state.activeTicketId && findTicketEntry(state.activeTicketId)) {
             renderMainTicket(findTicketEntry(state.activeTicketId));
@@ -1929,6 +1892,7 @@
     }
 
     function mountDeskV2() {
+        removeFocusContextPanel();
         document.body.classList.add('desk-v2-mode');
         document.title = 'Velodesk CRM — Cockpit';
 

@@ -238,38 +238,16 @@
         if (panel) panel.classList.remove('open');
     };
 
-    /* ─── Focus mode: painel contexto ─── */
-    window.renderFocusContextPanel = function (ticketId) {
+    /* ─── Focus mode: painel contexto (desativado — duplicava painel direito do CRM) ─── */
+    window.renderFocusContextPanel = function () {
         var existing = document.getElementById('cockpitFocusContext');
         if (existing) existing.remove();
-        var cols = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
-        var ticket = null;
-        cols.some(function (c) {
-            return (c.tickets || []).some(function (t) {
-                if (t.id === ticketId) { ticket = t; return true; }
-                return false;
-            });
-        });
-        if (!ticket) return;
-        var panel = document.createElement('aside');
-        panel.id = 'cockpitFocusContext';
-        panel.className = 'cockpit-focus-context';
-        var clientName = ticket.clientName || ticket.solicitante || 'Cliente';
-        panel.innerHTML =
-            '<h4><i class="fas fa-user"></i> ' + esc(clientName) + '</h4>' +
-            '<p>Ticket #' + ticket.id + '</p>' +
-            '<p class="cockpit-focus-context__title">' + esc((ticket.title || '').substring(0, 60)) + '</p>' +
-            (typeof window.buildClientIntelligence === 'function' && typeof window.renderCustomerIntelligenceHtml === 'function'
-                ? window.renderCustomerIntelligenceHtml(window.buildClientIntelligence(ticket, {}))
-                : '') +
-            '<button type="button" class="btn-secondary btn-sm" onclick="openClientFromTicket(' + ticketId + ')"><i class="fas fa-id-card"></i> Ver 360°</button>';
-        document.body.appendChild(panel);
     };
 
     var origEnterFocus = window.enterDeskFocusMode;
     window.enterDeskFocusMode = function (ticketId) {
         if (origEnterFocus) origEnterFocus(ticketId);
-        setTimeout(function () { renderFocusContextPanel(ticketId); }, 500);
+        renderFocusContextPanel();
     };
 
     var origExitFocus = window.exitDeskFocusMode;
