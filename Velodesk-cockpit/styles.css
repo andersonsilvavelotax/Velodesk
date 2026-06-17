@@ -2665,11 +2665,11 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
 }
 
 .status-indicator.em-aberto {
-    background: #28a745;
+    background: #15A237;
 }
 
 .status-indicator.em-espera {
-    background: #f59e0b;
+    background: #eab308;
 }
 
 .status-indicator.pendente {
@@ -3630,7 +3630,7 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
 }
 
 .ticket-tab-main-column .meta-value.status-novo { color: #1976d2; }
-.ticket-tab-main-column .meta-value.status-em-aberto { color: #28a745; }
+.ticket-tab-main-column .meta-value.status-em-aberto { color: #15A237; }
 .ticket-tab-main-column .meta-value.status-em-espera,
 .ticket-tab-main-column .meta-value.status-pendente { color: #d97706; }
 .ticket-tab-main-column .meta-value.status-resolvido { color: #6c757d; }
@@ -3822,7 +3822,7 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
 }
 
 .ticket-status-dates.status-novo { color: #1976d2; }
-.ticket-status-dates.status-em-aberto { color: #28a745; }
+.ticket-status-dates.status-em-aberto { color: #15A237; }
 .ticket-status-dates.status-em-espera,
 .ticket-status-dates.status-pendente { color: #d97706; }
 .ticket-status-dates.status-resolvido { color: #6c757d; }
@@ -12918,14 +12918,16 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
 }
 
 .ticket-item-slim[data-status="em-andamento"] .ticket-slim-status,
-.ticket-item-slim[data-status="em_andamento"] .ticket-slim-status {
-    background: #e8f5e9;
-    color: #28a745;
+.ticket-item-slim[data-status="em_andamento"] .ticket-slim-status,
+.ticket-item-slim[data-status="em-aberto"] .ticket-slim-status {
+    background: #dcfce7;
+    color: #15A237;
 }
 
-.ticket-item-slim[data-status="pendente"] .ticket-slim-status {
-    background: #fff3e0;
-    color: #ff9800;
+.ticket-item-slim[data-status="pendente"] .ticket-slim-status,
+.ticket-item-slim[data-status="em-espera"] .ticket-slim-status {
+    background: #fef9c3;
+    color: #ca8a04;
 }
 
 .ticket-item-slim[data-status="resolvido"] .ticket-slim-status {
@@ -12981,6 +12983,7 @@ body.has-ticket-tabs-visible #tickets .ticket-tabs-content {
 
 .ticket-slim-date,
 .ticket-slim-update {
+    color: #374151;
     color: #868e96;
     font-size: 0.63rem;
     display: flex;

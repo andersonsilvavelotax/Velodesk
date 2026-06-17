@@ -236,7 +236,7 @@ function renderTickets() {
         const statusInfo = getStatusInfo(ticket.status);
         
         const ticketElement = document.createElement('div');
-        ticketElement.className = 'ticket-item-slim';
+        ticketElement.className = 'ticket-item-slim ticket-card';
         ticketElement.style.borderLeftColor = statusInfo.color;
         ticketElement.setAttribute('data-status', ticket.status || 'novos');
         
@@ -280,14 +280,14 @@ function renderTickets() {
                     <span class="ticket-status-dot" style="background-color: ${statusInfo.color}"></span>
                     <h5>${ticket.title || 'Sem título'}</h5>
                 </div>
-                <span class="ticket-slim-status">${statusInfo.name}</span>
+                <span class="ticket-slim-status ${ticket.status === 'em-aberto' || ticket.status === 'em-andamento' ? 'badge-progress' : ''}${ticket.status === 'em-espera' || ticket.status === 'pendente' ? ' badge-pending' : ''}">${statusInfo.name}</span>
             </div>
             <div class="ticket-slim-content">
                 <p class="ticket-slim-description">${(ticket.description || '').substring(0, 80)}${(ticket.description || '').length > 80 ? '...' : ''}</p>
             </div>
             <div class="ticket-slim-footer">
                 <div class="ticket-slim-footer-left">
-                    <span class="ticket-slim-date">
+                    <span class="ticket-slim-date tc-time">
                         <i class="fas fa-calendar-alt"></i> ${formattedDate}
                     </span>
                     <span class="ticket-slim-update" title="Última atualização: ${formattedUpdate}">
@@ -313,9 +313,11 @@ function getStatusInfo(status) {
     const statusMap = {
         'novos': { name: 'Novos', color: '#1976d2' },
         'novo': { name: 'Novos', color: '#1976d2' },
-        'em-andamento': { name: 'Em Andamento', color: '#28a745' },
-        'em_andamento': { name: 'Em Andamento', color: '#28a745' },
-        'pendente': { name: 'Pendente', color: '#ffc107' },
+        'em-andamento': { name: 'Em Andamento', color: '#15A237' },
+        'em_andamento': { name: 'Em Andamento', color: '#15A237' },
+        'em-aberto': { name: 'Em Andamento', color: '#15A237' },
+        'em-espera': { name: 'Pendente', color: '#eab308' },
+        'pendente': { name: 'Pendente', color: '#eab308' },
         'resolvido': { name: 'Resolvido', color: '#6c757d' },
         'fechado': { name: 'Fechado', color: '#dc3545' }
     };
@@ -491,9 +493,9 @@ const VELO_STATUS_LABELS = {
 
 const VELO_STATUS_COLORS = {
     novo: '#1976d2',
-    'em-aberto': '#28a745',
-    'em-espera': '#f59e0b',
-    pendente: '#ffc107',
+    'em-aberto': '#15A237',
+    'em-espera': '#eab308',
+    pendente: '#eab308',
     resolvido: '#6c757d'
 };
 
@@ -916,7 +918,9 @@ function renderTicketClientProfileBlock(ticket) {
 
 // Função para gerar HTML do conteúdo do ticket na aba
 function generateTicketTabHTML(ticket, statusName, statusColor) {
-    const clientProfileHtml = !ticket.isNewTicket ? renderTicketClientProfileBlock(ticket) : '';
+    const headerBlockHtml = !ticket.isNewTicket && typeof renderTicketHeaderBarBlock === 'function'
+        ? renderTicketHeaderBarBlock(ticket, statusName, statusColor)
+        : '';
     const tabulacaoHtml = getTabulacaoMetaHtml(ticket);
     const tabulacaoBlock = tabulacaoHtml
         ? `<div class="ticket-details"><div class="ticket-meta">${tabulacaoHtml}</div></div>`
@@ -926,10 +930,9 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
             <div class="ticket-tab-ticket-layout">
                 <!-- Coluna Principal -->
                 <div class="ticket-tab-main-column">
-                    <!-- Cabeçalho do Ticket -->
-                    <div class="ticket-header">
-                        ${ticket.isNewTicket ? 
-                            `<div class="new-ticket-header">
+                    ${ticket.isNewTicket ?
+                        `<div class="ticket-header">
+                            <div class="new-ticket-header">
                                 <div class="form-group">
                                     <label for="ticketTitleInput-${ticket.id}">Título (visão do agente):</label>
                                     <input type="text" id="ticketTitleInput-${ticket.id}" class="form-input ticket-title-input" placeholder="Resumo interno — ex.: Lentidão fibra · Maria Oliveira" value="${ticket.title}">
@@ -938,12 +941,10 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                                     <label for="ticketDescriptionInput-${ticket.id}">Descrição (registro do agente):</label>
                                     <textarea id="ticketDescriptionInput-${ticket.id}" class="form-textarea" rows="4" placeholder="Contexto para a equipe. O cliente recebe apenas a resposta pública enviada.">${ticket.description}</textarea>
                                 </div>
-                            </div>` :
-                            renderTicketStatusBarHtml(ticket, statusName, statusColor)
-                        }
-                    </div>
-
-                    ${clientProfileHtml}
+                            </div>
+                        </div>` :
+                        (headerBlockHtml || `<div class="ticket-header">${renderTicketStatusBarHtml(ticket, statusName, statusColor)}</div>`)
+                    }
 
                     ${tabulacaoBlock}
 
@@ -966,7 +967,7 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                         <div class="octa-comment-panel-row">
                             <div class="octa-panel-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
                             <div class="octa-panel-box">
-                                <div class="response-tabs octa-nav-tabs">
+                                <div class="response-tabs tabs-top octa-nav-tabs">
                                     <button type="button" class="response-tab octa-nav-tab octa-tab-public active" data-tab="public-${ticket.id}" onclick="switchResponseTabInTab('${ticket.id}', 'public')"><i class="fas fa-envelope"></i> Resposta pública</button>
                                     <button type="button" class="response-tab octa-nav-tab octa-tab-internal" data-tab="internal-${ticket.id}" onclick="switchResponseTabInTab('${ticket.id}', 'internal')"><i class="fas fa-edit"></i> Anotação interna</button>
                                 </div>
@@ -998,7 +999,7 @@ function generateTicketTabHTML(ticket, statusName, statusColor) {
                 </div>
 
                 <!-- Coluna Lateral — Formulário fixo do ticket -->
-                <div class="ticket-tab-sidebar velo-lateral-form-sidebar">
+                <div class="ticket-tab-sidebar velo-lateral-form-sidebar right-panel">
                     ${typeof renderTicketLateralFormHTML === 'function' ? renderTicketLateralFormHTML(ticket) : ''}
                 </div>
             </div>
@@ -1479,6 +1480,10 @@ function setupTicketTabEvents(ticketId) {
             setupFormFieldEvents(ticketId);
         }
     }
+
+    if (typeof initTicketCrmUi === 'function') {
+        initTicketCrmUi(ticketId);
+    }
     
     // Fechar dropdowns quando clicar fora
     document.addEventListener('click', function(e) {
@@ -1558,7 +1563,7 @@ function createTicketModal(ticket, box) {
                             <div class="octa-comment-panel-row">
                                 <div class="octa-panel-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
                                 <div class="octa-panel-box">
-                                    <div class="response-tabs octa-nav-tabs">
+                                    <div class="response-tabs tabs-top octa-nav-tabs">
                                         <button type="button" class="response-tab octa-nav-tab octa-tab-public active" data-tab="public"><i class="fas fa-envelope"></i> Resposta pública</button>
                                         <button type="button" class="response-tab octa-nav-tab octa-tab-internal" data-tab="internal"><i class="fas fa-edit"></i> Anotação interna</button>
                                     </div>

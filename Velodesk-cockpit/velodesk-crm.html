@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Velodesk CRM</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <link rel="stylesheet" href="velodesk-crm.css?v=1">
+    <script src="cockpit-config.js?v=1"></script>
+    <script src="seed-demo-tickets.js?v=4"></script>
+</head>
+<body>
+    <div id="velodeskDeskV2Root"></div>
+    <script src="velodesk-desk-v2.js?v=1"></script>
+    <script>
+        localStorage.setItem('isLoggedIn', 'true');
+        if (typeof window.seedDemoTickets === 'function') {
+            window.seedDemoTickets({ force: false, replaceAll: false });
+        }
+        if (window.VelodeskDeskV2 && typeof window.VelodeskDeskV2.mount === 'function') {
+            window.VelodeskDeskV2.mount();
+        }
+    </script>
+</body>
+</html>

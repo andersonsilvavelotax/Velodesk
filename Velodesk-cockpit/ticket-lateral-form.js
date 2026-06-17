@@ -390,8 +390,14 @@
 
     function renderProductTags(produtos) {
         return (produtos || []).map(function (p) {
-            const cls = PRODUCT_TAG_CLASS[p] || 'velo-tag--default';
-            return '<span class="velo-product-tag ' + cls + '">' + escapeHtml(p) + '</span>';
+            var lower = String(p).toLowerCase();
+            var cls = 'rp-product-tag--default';
+            if (lower.indexOf('móvel') >= 0 || lower.indexOf('movel') >= 0) cls = 'rp-product-tag--mobile';
+            else if (lower.indexOf('combo') >= 0) cls = 'rp-product-tag--combo';
+            else if (lower.indexOf('fibra') >= 0) cls = 'rp-product-tag--fiber';
+            else if (lower.indexOf('tv') >= 0) cls = 'rp-product-tag--tv';
+            else cls = PRODUCT_TAG_CLASS[p] ? PRODUCT_TAG_CLASS[p].replace('velo-tag', 'rp-product-tag') : 'rp-product-tag--default';
+            return '<span class="rp-product-tag ' + cls + '">' + escapeHtml(p) + '</span>';
         }).join('');
     }
 
@@ -600,11 +606,11 @@
 
         switch (key) {
             case 'cpf':
-                inner = '<div class="velo-lf-cpf-row">' +
+                inner = '<div class="velo-lf-cpf-row rp-cpf-row">' +
                     '<input type="text" class="form-input velo-lf-input" id="' + id + '" data-lf-key="cpf" ' +
                     'placeholder="000.000.000-00" value="' + escapeHtml(formatCpf(val)) + '" maxlength="14">' +
-                    '<button type="button" class="btn-secondary velo-lf-db-btn" data-ticket-id="' + ticket.id + '" title="Consultar DB">' +
-                    '<i class="fas fa-search"></i></button></div>';
+                    '<button type="button" class="btn-cpf-search velo-lf-db-btn" data-ticket-id="' + ticket.id + '" title="Consultar DB">' +
+                    '<i class="ti ti-search"></i></button></div>';
                 break;
             case 'canal':
                 inner = '<input type="text" class="form-input velo-lf-input velo-lf-readonly" id="' + id + '" data-lf-key="canal" ' +
@@ -662,23 +668,40 @@
         seedClientDB();
         const config = getConfig();
         const data = ensureLateralFormData(ticket);
-        let fieldsHtml = '';
+        let classificacaoHtml = '';
         let advancedHtml = '';
         const basicFields = ['canal', 'classificacaoTipo', 'produto', 'motivo'];
         FIELD_ORDER.forEach(function (key) {
             if (key === 'cpf') return;
             const html = renderField(ticket, key, data, config);
-            if (basicFields.indexOf(key) !== -1) fieldsHtml += html;
+            if (basicFields.indexOf(key) !== -1) classificacaoHtml += html;
             else advancedHtml += html;
         });
-
-        const shortTitle = ticket.title && ticket.title.length > 28
-            ? ticket.title.substring(0, 28) + '…'
-            : (ticket.title || 'Sem título');
 
         const aiTabHtml = typeof window.renderVeloTabulationSuggestionHtml === 'function'
             ? window.renderVeloTabulationSuggestionHtml(ticket)
             : '';
+
+        if (typeof window.renderRightPanelSections === 'function') {
+            const rpBody = window.renderRightPanelSections(ticket, {
+                classificacao:
+                    '<div class="velo-lf-fields velo-lf-fields--classificacao">' + classificacaoHtml +
+                    '<button type="button" class="velo-lf-toggle-advanced" onclick="this.nextElementSibling.classList.toggle(\'is-open\'); this.textContent = this.nextElementSibling.classList.contains(\'is-open\') ? \'Ocultar campos avançados\' : \'Mostrar campos avançados\'">Mostrar campos avançados</button>' +
+                    '<div class="velo-lf-advanced">' + advancedHtml + '</div></div>',
+                ia: aiTabHtml
+            });
+
+            return '<div class="velo-lateral-form-panel right-panel" data-ticket-id="' + ticket.id + '">' +
+                rpBody +
+                '<div class="velo-lf-actions">' +
+                '<button type="button" class="btn-secondary btn-sm btn-ticket-whatsapp" onclick="openTicketWhatsApp(' + ticket.id + ')"><i class="fab fa-whatsapp"></i> Abrir conversa</button>' +
+                '<button type="button" class="btn-primary velo-lf-save" data-ticket-id="' + ticket.id + '">' +
+                '<i class="fas fa-save"></i> Salvar no ticket</button></div></div>';
+        }
+
+        const shortTitle = ticket.title && ticket.title.length > 28
+            ? ticket.title.substring(0, 28) + '…'
+            : (ticket.title || 'Sem título');
 
         const client = getClientFromTicket(ticket);
         const thermoHtml = client
@@ -693,7 +716,7 @@
             '</div>' +
             '<span class="velo-lf-badge">Fixo</span></div>' +
             '<div class="velo-lf-thermo-wrap">' + thermoHtml + '</div>' +
-            '<div class="velo-lf-fields">' + fieldsHtml +
+            '<div class="velo-lf-fields">' + classificacaoHtml +
             '<button type="button" class="velo-lf-toggle-advanced" onclick="this.nextElementSibling.classList.toggle(\'is-open\'); this.textContent = this.nextElementSibling.classList.contains(\'is-open\') ? \'Ocultar campos avançados\' : \'Mostrar campos avançados\'">Mostrar campos avançados</button>' +
             '<div class="velo-lf-advanced">' + advancedHtml + '</div></div>' +
             aiTabHtml +

@@ -153,10 +153,10 @@
         return [
             { id: 'novos', name: 'Novos', tickets: [] },
             { id: 'em-andamento', name: 'Em Andamento', tickets: [] },
-            { id: 'em-espera', name: 'Em Espera', tickets: [] },
+            { id: 'em-espera', name: 'Pendente', tickets: [] },
             { id: 'pendentes', name: 'Pendentes', tickets: [] },
             { id: 'resolvidos', name: 'Resolvidos', tickets: [] },
-            { id: 'em-aberto', name: 'Em Aberto', tickets: [] },
+            { id: 'em-aberto', name: 'Em Andamento', tickets: [] },
             { id: 'financeiro', name: 'Financeiro', tickets: [] },
             { id: 'n2', name: 'N2', tickets: [] },
             { id: 'ouvidoria', name: 'Ouvidoria', tickets: [] },
