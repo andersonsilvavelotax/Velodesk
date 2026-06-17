@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="cockpit-ux-enhancements.css?v=1">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
-    <link rel="stylesheet" href="velodesk-crm.css?v=1">
+    <link rel="stylesheet" href="velodesk-crm.css?v=15">
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/compromise@14.10.0/builds/compromise.min.js"></script>
@@ -35,10 +35,11 @@
             <div class="header-content">
                 <div class="header-left">
                     <h1 class="header-brand">Velodesk</h1>
-                    <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Recolher/Expandir menu lateral">
+                    <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Recolher/Expandir menu lateral" style="display: flex;">
                         <i class="fas fa-bars"></i>
                     </button>
                     <div class="header-tools-left" id="headerToolsLeft">
+                        <button type="button" id="cockpitKeyboardHelpBtn" class="btn-header-theme" title="Atalhos de teclado (?)"><i class="fas fa-keyboard"></i></button>
                         <button type="button" class="btn-header-theme" id="velodeskThemeToggle" onclick="toggleVelodeskDarkMode()" title="Modo escuro (salvo por perfil)">
                             <i class="fas fa-moon"></i>
                         </button>
@@ -56,8 +57,13 @@
                     <button type="button" class="btn-header-quick" onclick="openQuickRegisterModal()" title="Registro rápido">
                         <i class="fas fa-bolt"></i> <span>Registro rápido</span>
                     </button>
+                    <div class="cockpit-global-search">
+                        <i class="fas fa-search"></i>
+                        <input type="search" id="cockpitGlobalSearch" placeholder="Buscar ticket #, CPF ou cliente…" autocomplete="off">
+                        <kbd>Ctrl+K</kbd>
+                    </div>
                     <div class="header-profile-wrap">
-                        <button type="button" class="profile-role-badge" id="profileRoleBadge" onclick="toggleProfileSwitcher()" title="Agente — Fila operacional · Alt+P para trocar">
+                        <button type="button" class="profile-role-badge" id="profileRoleBadge" onclick="toggleProfileSwitcher()" title="Agente — Fila operacional, tickets e registro rápido · Alt+P para trocar" style="background: linear-gradient(135deg, #1634FF, var(--eco-blue, #1634FF));">
                             <i class="fas fa-headset"></i> <span>Agente</span> <i class="fas fa-chevron-down eco-badge-chevron"></i>
                         </button>
                         <div class="eco-profile-dropdown" id="ecoProfileDropdown">
@@ -1433,14 +1439,14 @@
     <script src="cockpit-config.js?v=1"></script>
     <script src="login-simple-fixed.js?v=9"></script>
     <script src="cockpit-crm-ui.js?v=2"></script>
-    <script src="seed-demo-tickets.js?v=4"></script>
+    <script src="seed-demo-tickets.js?v=5"></script>
     <script src="ticket-lateral-form.js?v=18"></script>
     <script src="cockpit-intelligence.js?v=2"></script>
     <script src="cockpit-supervisor.js?v=3"></script>
-    <script src="velodesk-ecosystem.js?v=19"></script>
+    <script src="velodesk-ecosystem.js?v=20"></script>
     <script src="cockpit-ux-enhancements.js?v=2"></script>
     <script src="cockpit-supervisor-ux.js?v=1"></script>
-    <script src="velodesk-desk-v2.js?v=1"></script>
+    <script src="velodesk-desk-v2.js?v=15"></script>
     
 </body>
 </html>

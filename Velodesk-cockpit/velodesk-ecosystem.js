@@ -241,7 +241,7 @@
     function initGlobalAIReview() {
         document.querySelectorAll('textarea:not([data-ai-skip]), #ticketDescription, #chatInput, #aiChatInput').forEach(attachAIReviewToField);
         const observer = new MutationObserver(() => {
-            document.querySelectorAll('textarea:not([data-ai-review-bound])').forEach(attachAIReviewToField);
+            document.querySelectorAll('textarea:not([data-ai-review-bound]):not([data-ai-skip])').forEach(attachAIReviewToField);
         });
         observer.observe(document.body, { childList: true, subtree: true });
     }
@@ -1492,14 +1492,14 @@
     }
 
     function findKanbanTicketById(ticketId) {
-        const id = parseInt(ticketId, 10);
+        const idKey = String(ticketId);
         const columns = JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
         for (const box of columns) {
             if (!box.tickets) continue;
-            const t = box.tickets.find(function (x) { return x.id === id; });
+            const t = box.tickets.find(function (x) { return String(x.id) === idKey; });
             if (t) return t;
         }
-        const tabInfo = window.openTicketTabs && window.openTicketTabs.get(id);
+        const tabInfo = window.openTicketTabs && window.openTicketTabs.get(parseInt(ticketId, 10));
         return tabInfo ? tabInfo.ticket : null;
     }
 
@@ -1839,6 +1839,9 @@
             document.body.appendChild(modal);
         }
         modal.style.display = 'flex';
+        if (document.body.classList.contains('desk-v2-mode')) {
+            modal.style.zIndex = '9000';
+        }
         modal.innerHTML = `
             <div class="modal-content modal-content--wide">
                 <div class="modal-header"><h3>${title}</h3><button class="close-btn" onclick="closeEcosystemModal()"><i class="fas fa-times"></i></button></div>

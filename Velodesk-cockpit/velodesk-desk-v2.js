@@ -6,18 +6,61 @@
 
     var QUEUE_STATUSES = [
         { id: 'novos', name: 'Novos', dot: '#1634FF', boxes: ['novos'] },
-        { id: 'em-andamento', name: 'Em andamento', dot: '#1694FF', boxes: ['em-andamento', 'em-aberto'] },
-        { id: 'pendente', name: 'Pendente', dot: '#FCC200', boxes: ['em-espera'] },
-        { id: 'aguard-retorno', name: 'Aguard. retorno', dot: 'rgba(252,194,0,0.55)', boxes: ['pendentes'] },
-        { id: 'resolvidos', name: 'Resolvidos', dot: '#15A237', boxes: ['resolvidos'] }
+        { id: 'em-andamento', name: 'Em andamento', dot: '#15A237', boxes: ['em-andamento', 'em-aberto'] },
+        { id: 'pendente', name: 'Pendente', dot: '#FCC200', boxes: ['em-espera', 'pendentes'] },
+        { id: 'resolvidos', name: 'Resolvidos', dot: '#9ca3af', boxes: ['resolvidos'] }
     ];
+
+    var SEND_STATUS_OPTIONS = [
+        { id: 'em-andamento', label: 'Enviar como: Em Andamento', cls: 'andamento' },
+        { id: 'pendente', label: 'Enviar como: Pendente', cls: 'pendente' },
+        { id: 'resolvidos', label: 'Enviar como: Resolvido', cls: 'resolvido' }
+    ];
+
+    var CASCADE_CATEGORIES = [
+        { id: 'emprestimo-pessoal', label: 'Empréstimo pessoal' },
+        { id: 'antecipacao', label: 'Antecipação' },
+        { id: 'alteracao-dados', label: 'Alteração de dados' }
+    ];
+
+    var CASCADE_ACTIONS = [
+        { id: 'cancelamento', label: 'Cancelamento' },
+        { id: 'estorno', label: 'Estorno' }
+    ];
+
+    var ESCALONAR_OPTIONS = [
+        { id: 'n2', label: 'N2' },
+        { id: 'financeiro', label: 'Financeiro' },
+        { id: 'suporte', label: 'Suporte' }
+    ];
+
+    var SLA_LABELS = {
+        ok: 'Dentro do prazo',
+        warning: 'Atenção — SLA',
+        critical: 'SLA crítico'
+    };
 
     var state = {
         activeQueue: 'em-andamento',
         activeTicketId: null,
         activeSort: 'data',
         composeMode: 'public',
-        searchQuery: ''
+        mainTab: 'conversa',
+        searchQuery: '',
+        queuePanelCollapsed: false,
+        ticketListCollapsed: false,
+        clientEditOpen: false,
+        clientEditDocBound: false,
+        sendStatusMenuOpen: false,
+        sendStatusDocBound: false,
+        cascadeCategory: null,
+        cascadeAction: null,
+        cascadeCategoryMenuOpen: false,
+        cascadeActionMenuOpen: false,
+        cascadeDocBound: false,
+        escalonar: null,
+        escalonarMenuOpen: false,
+        escalonarDocBound: false
     };
 
     function isDeskV2Mode() {
@@ -46,6 +89,15 @@
         return String(name || '?').slice(0, 2).toUpperCase();
     }
 
+    function getAgentName() {
+        try {
+            var user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+            return user.name || 'Ana Silva';
+        } catch (e) {
+            return 'Ana Silva';
+        }
+    }
+
     function getKanbanColumns() {
         return JSON.parse(localStorage.getItem('kanbanColumns') || '[]');
     }
@@ -65,6 +117,25 @@
         }
     }
 
+    function normalizeCpf(value) {
+        return String(value || '').replace(/\D/g, '');
+    }
+
+    function formatCpf(digits) {
+        var d = normalizeCpf(digits);
+        if (d.length !== 11) return digits || '';
+        return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+
+    function getClientContactFields(ticket, client) {
+        return {
+            name: ticket.clientName || ticket.solicitante || (client && client.name) || '',
+            cpf: formatCpf((ticket.lateralForm && ticket.lateralForm.cpf) || ticket.clientCPF || (client && client.cpf) || ''),
+            email: (client && client.email) || ticket.clientEmail || '',
+            phone: (client && client.telefone) || ticket.clientPhone || ''
+        };
+    }
+
     function channelIcon(channel) {
         var c = String(channel || '').toLowerCase();
         if (c.indexOf('whats') >= 0) return 'ti-brand-whatsapp';
@@ -77,8 +148,7 @@
     function mapTicketQueueId(ticket, boxId) {
         if (boxId === 'novos') return 'novos';
         if (boxId === 'em-andamento' || boxId === 'em-aberto' || ticket.status === 'em-aberto') return 'em-andamento';
-        if (boxId === 'em-espera') return 'pendente';
-        if (boxId === 'pendentes' || ticket.status === 'pendente') return 'aguard-retorno';
+        if (boxId === 'em-espera' || boxId === 'pendentes' || ticket.status === 'pendente') return 'pendente';
         if (boxId === 'resolvidos' || ticket.status === 'resolvido') return 'resolvidos';
         return 'em-andamento';
     }
@@ -88,7 +158,6 @@
             'em-andamento': { label: 'Em andamento', cls: 'andamento' },
             'novos': { label: 'Novo', cls: 'novo' },
             'pendente': { label: 'Pendente', cls: 'pendente' },
-            'aguard-retorno': { label: 'Aguard. retorno', cls: 'aguardando' },
             'resolvidos': { label: 'Resolvido', cls: 'resolvido' }
         };
         return map[queueId] || { label: 'Em andamento', cls: 'andamento' };
@@ -99,6 +168,35 @@
         var d = new Date(iso);
         return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) +
             ' · ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function getTicketTitle(ticket) {
+        return ticket.title || ticket.description || 'Sem assunto';
+    }
+
+    function ensureTicketSlaFields(ticket) {
+        if (ticket.slaRemaining != null && ticket.slaStatus) return;
+        var priority = String(ticket.priority || '').toLowerCase();
+        var limitHours = priority === 'critica' || priority === 'critical' ? 4
+            : priority === 'alta' || priority === 'high' ? 8 : 24;
+        var created = ticket.createdAt ? new Date(ticket.createdAt).getTime() : Date.now();
+        var elapsedMin = Math.max(0, Math.round((Date.now() - created) / 60000));
+        var totalMin = limitHours * 60;
+        ticket.slaRemaining = totalMin - elapsedMin;
+        if (ticket.slaRemaining <= 0) ticket.slaStatus = 'critical';
+        else if (ticket.slaRemaining <= Math.min(60, totalMin * 0.2)) ticket.slaStatus = 'warning';
+        else ticket.slaStatus = 'ok';
+    }
+
+    function getTicketSlaStatus(ticket) {
+        ensureTicketSlaFields(ticket);
+        if (ticket.slaStatus === 'critical' || ticket.slaStatus === 'overdue') return 'critical';
+        if (ticket.slaStatus === 'warning' || ticket.slaStatus === 'attention') return 'warning';
+        if (ticket.slaRemaining != null) {
+            if (ticket.slaRemaining <= 0) return 'critical';
+            if (ticket.slaRemaining <= 30) return 'warning';
+        }
+        return 'ok';
     }
 
     function formatMsgMeta(iso, author) {
@@ -133,6 +231,125 @@
             if (t) return { ticket: t, boxId: box.id, box: box, queueId: mapTicketQueueId(t, box.id) };
         }
         return null;
+    }
+
+    function ensureExtendedClientDB() {
+        try {
+            var db = JSON.parse(localStorage.getItem('velodeskClientDB') || '{}');
+            var patch = {
+                '45678912345': {
+                    cpf: '456.789.123-45',
+                    name: 'João Ferreira',
+                    email: 'joao.ferreira@email.com',
+                    telefone: '(11) 99876-5432',
+                    situacao: 'Adimplente',
+                    produtos: ['Internet Fibra'],
+                    risco: 'Baixo',
+                    termometro: 45,
+                    termometroLabel: 'Estável',
+                    atendimentos: [{ data: '2026-06-10', canal: 'E-mail', assunto: 'Segunda via fatura', status: 'Aberto' }],
+                    analise: 'Cliente regular; solicitação financeira simples.'
+                },
+                '55566677788': {
+                    cpf: '555.666.777-88',
+                    name: 'Carlos Mendes',
+                    email: 'carlos.mendes@email.com',
+                    telefone: '(11) 97654-3210',
+                    situacao: 'Adimplente',
+                    produtos: ['TV'],
+                    risco: 'Médio',
+                    termometro: 52,
+                    termometroLabel: 'Atenção',
+                    atendimentos: [{ data: '2026-06-08', canal: 'Telefone', assunto: 'Cancelamento TV', status: 'Aberto' }],
+                    analise: 'Cliente solicitando cancelamento — oportunidade de retenção.'
+                }
+            };
+            var changed = false;
+            Object.keys(patch).forEach(function (key) {
+                if (!db[key]) {
+                    db[key] = patch[key];
+                    changed = true;
+                }
+            });
+            if (changed) localStorage.setItem('velodeskClientDB', JSON.stringify(db));
+        } catch (e) { /* noop */ }
+    }
+
+    function normalizeTicketForDeskV2(ticket) {
+        if (!ticket) return ticket;
+
+        if (!ticket.lateralForm) ticket.lateralForm = {};
+
+        if ((ticket.clientName || '').indexOf('Carlos Mendes') >= 0 &&
+            normalizeCpf(ticket.clientCPF || ticket.lateralForm.cpf) === '98765432100') {
+            ticket.clientCPF = '555.666.777-88';
+            ticket.lateralForm.cpf = '55566677788';
+        }
+
+        var cpfDigits = normalizeCpf(ticket.lateralForm.cpf || ticket.clientCPF);
+        if (cpfDigits && !ticket.lateralForm.cpf) ticket.lateralForm.cpf = cpfDigits;
+        if (cpfDigits && !ticket.clientCPF) ticket.clientCPF = formatCpf(cpfDigits);
+
+        var client = lookupClient(cpfDigits);
+
+        ticket.clientName = ticket.clientName || ticket.solicitante || (client && client.name) || 'Cliente';
+        ticket.solicitante = ticket.solicitante || ticket.clientName;
+
+        if (!ticket.lateralForm.canal) {
+            ticket.lateralForm.canal = ticket.channel || ticket.source || 'WhatsApp';
+        }
+        if (!ticket.lateralForm.classificacaoTipo) ticket.lateralForm.classificacaoTipo = 'Solicitação';
+        if (!ticket.lateralForm.produto) {
+            ticket.lateralForm.produto = (client && client.produtos && client.produtos[0]) || 'Internet Fibra';
+        }
+        if (!ticket.lateralForm.motivo) ticket.lateralForm.motivo = 'Em análise';
+        if (!ticket.lateralForm.responsavel) {
+            ticket.lateralForm.responsavel = ticket.responsibleAgent || ticket.assignedTo || getAgentName();
+        }
+        if (ticket.lateralForm.automacaoCategoria === undefined) ticket.lateralForm.automacaoCategoria = '';
+        if (ticket.lateralForm.automacaoAcao === undefined) ticket.lateralForm.automacaoAcao = '';
+        if (ticket.lateralForm.escalonar === undefined) ticket.lateralForm.escalonar = '';
+
+        ensureTicketSlaFields(ticket);
+
+        if (!ticket.clientEmail && client && client.email) ticket.clientEmail = client.email;
+        if (!ticket.clientPhone && client && client.telefone) ticket.clientPhone = client.telefone;
+
+        if (!ticket.channel && ticket.lateralForm.canal) ticket.channel = ticket.lateralForm.canal;
+        if (!ticket.source && ticket.channel) ticket.source = ticket.channel;
+
+        if (!ticket.messages || !ticket.messages.length) {
+            var created = ticket.createdAt || new Date().toISOString();
+            ticket.messages = [{
+                fromClient: true,
+                type: 'client',
+                text: ticket.description || ticket.title || 'Solicitação do cliente.',
+                timestamp: created,
+                author: ticket.clientName
+            }];
+        }
+
+        if (!ticket.updatedAt) ticket.updatedAt = ticket.createdAt || new Date().toISOString();
+        if (!ticket.createdAt) ticket.createdAt = ticket.updatedAt;
+
+        return ticket;
+    }
+
+    function migrateAllTicketsForDeskV2() {
+        ensureExtendedClientDB();
+        var columns = getKanbanColumns();
+        if (!columns.length) return;
+
+        var changed = false;
+        columns.forEach(function (box) {
+            (box.tickets || []).forEach(function (t, idx) {
+                var before = JSON.stringify(t);
+                normalizeTicketForDeskV2(t);
+                if (JSON.stringify(t) !== before) changed = true;
+            });
+        });
+
+        if (changed) saveKanbanColumns(columns);
     }
 
     function ensureDeskV2PrototypeTickets() {
@@ -191,7 +408,9 @@
                 status: 'pendente',
                 clientName: 'Carlos Mendes',
                 solicitante: 'Carlos Mendes',
-                clientCPF: '987.654.321-00',
+                clientCPF: '555.666.777-88',
+                clientEmail: 'carlos.mendes@email.com',
+                clientPhone: '(11) 97654-3210',
                 channel: 'Telefone',
                 createdAt: new Date(now - 86400000).toISOString(),
                 updatedAt: new Date(now - 86400000).toISOString(),
@@ -202,7 +421,15 @@
                     timestamp: new Date(now - 86400000).toISOString(),
                     author: 'Carlos Mendes'
                 }],
-                lateralForm: { canal: 'Telefone', classificacaoTipo: 'Solicitação', produto: 'TV', motivo: 'Cancelamento', cpf: '98765432100' }
+                lateralForm: {
+                    canal: 'Telefone',
+                    classificacaoTipo: 'Solicitação',
+                    produto: 'TV',
+                    motivo: 'Cancelamento',
+                    cpf: '55566677788',
+                    automacaoCategoria: '',
+                    automacaoAcao: ''
+                }
             },
             {
                 id: now + 902,
@@ -212,6 +439,8 @@
                 clientName: 'João Ferreira',
                 solicitante: 'João Ferreira',
                 clientCPF: '456.789.123-45',
+                clientEmail: 'joao.ferreira@email.com',
+                clientPhone: '(11) 99876-5432',
                 channel: 'E-mail',
                 createdAt: new Date(now - 3600000).toISOString(),
                 updatedAt: new Date(now - 3600000).toISOString(),
@@ -222,7 +451,15 @@
                     timestamp: new Date(now - 3600000).toISOString(),
                     author: 'João Ferreira'
                 }],
-                lateralForm: { canal: 'E-mail', classificacaoTipo: 'Solicitação', produto: 'Internet Fibra', motivo: 'Sem conexão', cpf: '45678912345' }
+                lateralForm: {
+                    canal: 'E-mail',
+                    classificacaoTipo: 'Solicitação',
+                    produto: 'Internet Fibra',
+                    motivo: 'Sem conexão',
+                    cpf: '45678912345',
+                    automacaoCategoria: '',
+                    automacaoAcao: ''
+                }
             }
         ];
 
@@ -241,6 +478,7 @@
 
         saveKanbanColumns(columns);
         localStorage.setItem('velodeskDeskV2Seeded', '1');
+        migrateAllTicketsForDeskV2();
     }
 
     function getFilteredTickets() {
@@ -343,21 +581,31 @@
             '<button type="button" class="crm-nav-icon" title="IA"><i class="ti ti-robot"></i></button>' +
             '</nav><div class="crm-sidebar__avatar" title="Ana Silva">AS</div></aside>' +
 
-            '<aside class="queue-panel">' +
-            '<div class="queue-panel__header"><h2 class="queue-panel__title">Fila de atendimento</h2>' +
+            '<aside class="queue-panel" id="crmQueuePanel">' +
+            '<div class="queue-panel__inner">' +
+            '<div class="queue-panel__header">' +
+            '<div class="queue-panel__header-top">' +
+            '<h2 class="queue-panel__title">Fila de atendimento</h2>' +
+            '<button type="button" class="crm-panel-retract" id="btnCollapseQueue" title="Recolher fila" aria-expanded="true">' +
+            '<i class="ti ti-chevron-left"></i></button></div>' +
             '<label class="queue-search"><i class="ti ti-search"></i>' +
             '<input type="search" id="crmQueueSearch" placeholder="Buscar tickets…"></label></div>' +
             '<ul class="queue-status-list" id="queueStatusList"></ul>' +
             '<div class="queue-panel__footer">' +
             '<button type="button" class="queue-btn queue-btn--secondary" id="crmNewBox"><i class="ti ti-plus"></i> Nova caixa</button>' +
             '<button type="button" class="queue-btn queue-btn--primary" id="crmNewTicket"><i class="ti ti-plus"></i> Criar ticket</button>' +
-            '</div></aside>' +
+            '</div></div>' +
+            '<button type="button" class="crm-panel-expand-tab crm-panel-expand-tab--queue" id="btnExpandQueue" title="Expandir fila">' +
+            '<i class="ti ti-chevron-right"></i><span>FILA</span></button></aside>' +
 
-            '<aside class="ticket-list-panel">' +
+            '<aside class="ticket-list-panel" id="crmTicketListPanel">' +
+            '<div class="ticket-list-panel__inner">' +
             '<div class="ticket-list-header">' +
             '<div class="ticket-list-header__row">' +
             '<h2 class="ticket-list-header__title" id="ticketListTitle">Em andamento · 0</h2>' +
             '<div class="ticket-list-header__actions">' +
+            '<button type="button" class="crm-panel-retract" id="btnCollapseTickets" title="Recolher lista" aria-expanded="true">' +
+            '<i class="ti ti-chevron-left"></i></button>' +
             '<button type="button" class="crm-icon-btn" title="Filtrar"><i class="ti ti-filter"></i></button>' +
             '<button type="button" class="crm-icon-btn" id="btnRefresh" title="Atualizar"><i class="ti ti-refresh"></i></button>' +
             '</div></div>' +
@@ -366,7 +614,9 @@
             '<button type="button" class="sort-chip" data-sort="prioridade">Prioridade</button>' +
             '<button type="button" class="sort-chip" data-sort="sla">SLA</button>' +
             '</div></div>' +
-            '<ul class="ticket-cards" id="ticketCards"></ul></aside>' +
+            '<ul class="ticket-cards" id="ticketCards"></ul></div>' +
+            '<button type="button" class="crm-panel-expand-tab crm-panel-expand-tab--tickets" id="btnExpandTickets" title="Expandir lista">' +
+            '<i class="ti ti-chevron-right"></i><span>LISTA</span></button></aside>' +
 
             '<main class="crm-main-content" id="crmMainContent">' +
             '<div class="crm-empty-state" id="crmEmptyMain">Selecione um ticket na lista ao lado</div>' +
@@ -378,11 +628,9 @@
             '<div class="thermo-score" id="thermoScore">38</div>' +
             '<div class="thermo-bar"><div class="thermo-fill" id="thermoFill" style="width:38%"></div></div>' +
             '<div class="thermo-label" id="thermoLabel">Estável</div></section>' +
-            '<section class="rp-section"><div class="rp-section__label">Contato</div>' +
-            '<div class="contact-line"><i class="ti ti-mail"></i><span id="contactEmail">—</span></div>' +
-            '<div class="contact-line"><i class="ti ti-phone"></i><span id="contactPhone">—</span></div>' +
-            '<div class="contact-line"><i class="ti ti-id-badge"></i><span id="contactCpf">—</span></div></section>' +
             '<section class="rp-section"><div class="rp-section__label">Classificação</div>' +
+            '<div class="rp-field"><label for="selResponsavel">Responsável</label>' +
+            '<input type="text" id="selResponsavel" readonly></div>' +
             '<div class="rp-field"><label for="selCanal">Canal</label><select id="selCanal">' +
             '<option>WhatsApp</option><option>Telefone</option><option>E-mail</option><option>Portal</option></select></div>' +
             '<div class="rp-field"><label for="selTipo">Tipo</label><select id="selTipo">' +
@@ -391,6 +639,8 @@
             '<option>Internet Fibra</option><option>TV</option><option>Telefone</option><option>Combo</option></select></div>' +
             '<div class="rp-field"><label for="selMotivo">Motivo</label><select id="selMotivo">' +
             '<option>Lentidão</option><option>Queda de sinal</option><option>Sem conexão</option><option>Cancelamento</option><option>Cobrança</option><option>Financeiro</option></select></div></section>' +
+            getEscalonarSectionHtml() +
+            getCascadeFlowSectionHtml() +
             '<section class="rp-section"><div class="ia-tabulation">' +
             '<div class="ia-tabulation__label">SUGESTÃO IA</div>' +
             '<div class="ia-tabulation__text" id="iaTabulationText"></div>' +
@@ -402,42 +652,449 @@
             '</div></aside></div>';
     }
 
-    function getMainTicketHtml() {
-        return '<header class="crm-ticket-header">' +
-            '<div class="crm-ticket-header__avatar" id="headerAvatar"></div>' +
-            '<div class="crm-ticket-header__info">' +
-            '<div class="crm-ticket-header__name" id="headerName"></div>' +
-            '<div class="crm-ticket-header__sub" id="headerSub"></div></div>' +
-            '<div class="crm-ticket-header__products" id="headerProducts"></div>' +
-            '<div class="crm-ticket-header__actions">' +
-            '<button type="button" class="crm-icon-btn" title="Histórico"><i class="ti ti-history"></i></button>' +
-            '<button type="button" class="crm-icon-btn" title="Mais"><i class="ti ti-dots"></i></button>' +
-            '</div></header>' +
-            '<nav class="tabs-top">' +
-            '<button type="button" class="tab-btn is-active" data-main-tab="conversa"><i class="ti ti-message-2"></i> Conversa</button>' +
-            '<button type="button" class="tab-btn" data-main-tab="notas"><i class="ti ti-file-text"></i> Notas</button>' +
-            '<button type="button" class="tab-btn" data-main-tab="historico"><i class="ti ti-history"></i> Histórico</button>' +
-            '</nav>' +
-            '<div class="tab-panel is-active" data-panel="conversa">' +
+    function getEscalonarSectionHtml() {
+        var options = ESCALONAR_OPTIONS.map(function (opt) {
+            return '<button type="button" class="cascade-flow__option" data-escalonar="' + opt.id + '">' + escapeHtml(opt.label) + '</button>';
+        }).join('');
+
+        return '<section class="rp-section rp-section--cascade" id="escalonarSection">' +
+            '<div class="rp-section__label">Escalonar</div>' +
+            '<div class="cascade-flow" id="escalonarFlow">' +
+            '<div class="cascade-flow__step cascade-flow__step--category">' +
+            '<button type="button" class="cascade-flow__trigger" id="escalonarBtn" aria-haspopup="listbox" aria-expanded="false">' +
+            '<span class="cascade-flow__trigger-prefix">Destino</span>' +
+            '<span class="cascade-flow__trigger-label" id="escalonarLabel">Selecionar escalonamento</span>' +
+            '<i class="ti ti-chevron-down"></i></button>' +
+            '<div class="cascade-flow__menu" id="escalonarMenu" role="listbox" hidden>' + options + '</div></div>' +
+            '<div class="cascade-flow__summary" id="escalonarSummary" hidden></div>' +
+            '</div></section>';
+    }
+
+    function getCascadeFlowSectionHtml() {
+        var categoryOptions = CASCADE_CATEGORIES.map(function (cat) {
+            return '<button type="button" class="cascade-flow__option" data-cascade-category="' + cat.id + '">' + escapeHtml(cat.label) + '</button>';
+        }).join('');
+        var actionOptions = CASCADE_ACTIONS.map(function (act) {
+            return '<button type="button" class="cascade-flow__option cascade-flow__option--action" data-cascade-action="' + act.id + '">' + escapeHtml(act.label) + '</button>';
+        }).join('');
+
+        return '<section class="rp-section rp-section--cascade" id="cascadeFlowSection">' +
+            '<div class="rp-section__label">Fluxo de automação</div>' +
+            '<div class="cascade-flow" id="cascadeFlow">' +
+            '<div class="cascade-flow__step cascade-flow__step--category">' +
+            '<button type="button" class="cascade-flow__trigger" id="cascadeCategoryBtn" aria-haspopup="listbox" aria-expanded="false">' +
+            '<span class="cascade-flow__trigger-prefix">Categoria</span>' +
+            '<span class="cascade-flow__trigger-label" id="cascadeCategoryLabel">Selecionar categoria</span>' +
+            '<i class="ti ti-chevron-down"></i></button>' +
+            '<div class="cascade-flow__menu" id="cascadeCategoryMenu" role="listbox" hidden>' + categoryOptions + '</div></div>' +
+            '<div class="cascade-flow__step cascade-flow__step--action" id="cascadeActionStep" aria-hidden="true">' +
+            '<button type="button" class="cascade-flow__trigger cascade-flow__trigger--secondary" id="cascadeActionBtn" aria-haspopup="listbox" aria-expanded="false" disabled>' +
+            '<span class="cascade-flow__trigger-prefix">Ação</span>' +
+            '<span class="cascade-flow__trigger-label" id="cascadeActionLabel">Selecionar ação</span>' +
+            '<i class="ti ti-chevron-down"></i></button>' +
+            '<div class="cascade-flow__menu" id="cascadeActionMenu" role="listbox" hidden>' + actionOptions + '</div></div>' +
+            '<div class="cascade-flow__summary" id="cascadeSummary" hidden></div>' +
+            '</div></section>';
+    }
+
+    function getEscalonarLabel(id) {
+        var opt = ESCALONAR_OPTIONS.find(function (o) { return o.id === id; });
+        return opt ? opt.label : '';
+    }
+
+    function closeEscalonarMenu() {
+        var menu = $('#escalonarMenu');
+        var btn = $('#escalonarBtn');
+        if (menu) menu.hidden = true;
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        state.escalonarMenuOpen = false;
+    }
+
+    function updateEscalonarUI() {
+        var label = $('#escalonarLabel');
+        var btn = $('#escalonarBtn');
+        var summary = $('#escalonarSummary');
+        if (label) {
+            label.textContent = state.escalonar
+                ? getEscalonarLabel(state.escalonar)
+                : 'Selecionar escalonamento';
+        }
+        if (btn) btn.classList.toggle('is-selected', !!state.escalonar);
+        if (summary) {
+            if (state.escalonar) {
+                summary.hidden = false;
+                summary.innerHTML = '<i class="ti ti-arrow-up-right"></i> Escalonado para <strong>' +
+                    escapeHtml(getEscalonarLabel(state.escalonar)) + '</strong>';
+            } else {
+                summary.hidden = true;
+                summary.innerHTML = '';
+            }
+        }
+    }
+
+    function persistEscalonarToTicket(entry) {
+        entry = entry || findTicketEntry(state.activeTicketId);
+        if (!entry) return;
+        if (!entry.ticket.lateralForm) entry.ticket.lateralForm = {};
+        entry.ticket.lateralForm.escalonar = state.escalonar || '';
+        entry.ticket.updatedAt = new Date().toISOString();
+        saveKanbanColumns(getKanbanColumns());
+    }
+
+    function restoreEscalonarFromTicket(entry) {
+        var lf = (entry && entry.ticket && entry.ticket.lateralForm) || {};
+        state.escalonar = lf.escalonar || null;
+        updateEscalonarUI();
+    }
+
+    function selectEscalonar(optionId, entry) {
+        entry = entry || findTicketEntry(state.activeTicketId);
+        state.escalonar = optionId;
+        closeEscalonarMenu();
+        closeCascadeMenus();
+        updateEscalonarUI();
+        persistEscalonarToTicket(entry);
+        if (typeof window.showNotification === 'function') {
+            showNotification('Escalonado para ' + getEscalonarLabel(optionId), 'success');
+        }
+    }
+
+    function bindEscalonarEvents(entry) {
+        var btn = $('#escalonarBtn');
+        var menu = $('#escalonarMenu');
+
+        if (btn) {
+            btn.onclick = function (e) {
+                e.stopPropagation();
+                var open = !state.escalonarMenuOpen;
+                closeEscalonarMenu();
+                closeCascadeMenus();
+                if (open && menu) {
+                    menu.hidden = false;
+                    btn.setAttribute('aria-expanded', 'true');
+                    state.escalonarMenuOpen = true;
+                }
+            };
+        }
+
+        if (menu) {
+            menu.querySelectorAll('[data-escalonar]').forEach(function (opt) {
+                opt.onclick = function (e) {
+                    e.stopPropagation();
+                    selectEscalonar(opt.getAttribute('data-escalonar'), entry);
+                };
+            });
+        }
+
+        if (!state.escalonarDocBound) {
+            state.escalonarDocBound = true;
+            document.addEventListener('click', function (e) {
+                if (!state.escalonarMenuOpen) return;
+                if (e.target.closest('#escalonarFlow')) return;
+                closeEscalonarMenu();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closeEscalonarMenu();
+            });
+        }
+    }
+
+    function getCascadeCategoryLabel(id) {
+        var cat = CASCADE_CATEGORIES.find(function (c) { return c.id === id; });
+        return cat ? cat.label : '';
+    }
+
+    function getCascadeActionLabel(id) {
+        var act = CASCADE_ACTIONS.find(function (a) { return a.id === id; });
+        return act ? act.label : '';
+    }
+
+    function closeCascadeMenus() {
+        var catMenu = $('#cascadeCategoryMenu');
+        var actMenu = $('#cascadeActionMenu');
+        var catBtn = $('#cascadeCategoryBtn');
+        var actBtn = $('#cascadeActionBtn');
+        if (catMenu) catMenu.hidden = true;
+        if (actMenu) actMenu.hidden = true;
+        if (catBtn) catBtn.setAttribute('aria-expanded', 'false');
+        if (actBtn) actBtn.setAttribute('aria-expanded', 'false');
+        state.cascadeCategoryMenuOpen = false;
+        state.cascadeActionMenuOpen = false;
+        closeEscalonarMenu();
+    }
+
+    function updateCascadeFlowUI() {
+        var catLabel = $('#cascadeCategoryLabel');
+        var actLabel = $('#cascadeActionLabel');
+        var actionStep = $('#cascadeActionStep');
+        var actionBtn = $('#cascadeActionBtn');
+        var summary = $('#cascadeSummary');
+        var catBtn = $('#cascadeCategoryBtn');
+
+        if (catLabel) {
+            catLabel.textContent = state.cascadeCategory
+                ? getCascadeCategoryLabel(state.cascadeCategory)
+                : 'Selecionar categoria';
+        }
+        if (catBtn) catBtn.classList.toggle('is-selected', !!state.cascadeCategory);
+
+        if (actionStep) {
+            actionStep.classList.toggle('is-visible', !!state.cascadeCategory);
+            actionStep.setAttribute('aria-hidden', state.cascadeCategory ? 'false' : 'true');
+        }
+        if (actionBtn) actionBtn.disabled = !state.cascadeCategory;
+
+        if (actLabel) {
+            actLabel.textContent = state.cascadeAction
+                ? getCascadeActionLabel(state.cascadeAction)
+                : 'Selecionar ação';
+        }
+        if (actionBtn) actionBtn.classList.toggle('is-selected', !!state.cascadeAction);
+
+        if (summary) {
+            if (state.cascadeCategory && state.cascadeAction) {
+                summary.hidden = false;
+                summary.innerHTML = '<i class="ti ti-route"></i> ' +
+                    escapeHtml(getCascadeCategoryLabel(state.cascadeCategory)) +
+                    ' <span class="cascade-flow__summary-arrow">→</span> ' +
+                    escapeHtml(getCascadeActionLabel(state.cascadeAction));
+            } else {
+                summary.hidden = true;
+                summary.innerHTML = '';
+            }
+        }
+    }
+
+    function persistCascadeToTicket(entry) {
+        entry = entry || findTicketEntry(state.activeTicketId);
+        if (!entry) return;
+        if (!entry.ticket.lateralForm) entry.ticket.lateralForm = {};
+        entry.ticket.lateralForm.automacaoCategoria = state.cascadeCategory || '';
+        entry.ticket.lateralForm.automacaoAcao = state.cascadeAction || '';
+        entry.ticket.updatedAt = new Date().toISOString();
+        saveKanbanColumns(getKanbanColumns());
+    }
+
+    function restoreCascadeFromTicket(entry) {
+        var lf = (entry && entry.ticket && entry.ticket.lateralForm) || {};
+        state.cascadeCategory = lf.automacaoCategoria || null;
+        state.cascadeAction = lf.automacaoAcao || null;
+        if (!state.cascadeCategory) state.cascadeAction = null;
+        updateCascadeFlowUI();
+    }
+
+    function selectCascadeCategory(categoryId, entry) {
+        entry = entry || findTicketEntry(state.activeTicketId);
+        if (state.cascadeCategory !== categoryId) {
+            state.cascadeAction = null;
+        }
+        state.cascadeCategory = categoryId;
+        closeCascadeMenus();
+        updateCascadeFlowUI();
+        persistCascadeToTicket(entry);
+        if (typeof window.showNotification === 'function') {
+            showNotification('Categoria selecionada: ' + getCascadeCategoryLabel(categoryId), 'info');
+        }
+    }
+
+    function selectCascadeAction(actionId, entry) {
+        entry = entry || findTicketEntry(state.activeTicketId);
+        state.cascadeAction = actionId;
+        closeCascadeMenus();
+        updateCascadeFlowUI();
+        persistCascadeToTicket(entry);
+        if (typeof window.showNotification === 'function') {
+            showNotification('Fluxo: ' + getCascadeCategoryLabel(state.cascadeCategory) + ' → ' + getCascadeActionLabel(actionId), 'success');
+        }
+    }
+
+    function bindCascadeFlowEvents(entry) {
+        var catBtn = $('#cascadeCategoryBtn');
+        var actBtn = $('#cascadeActionBtn');
+        var catMenu = $('#cascadeCategoryMenu');
+        var actMenu = $('#cascadeActionMenu');
+
+        if (catBtn) {
+            catBtn.onclick = function (e) {
+                e.stopPropagation();
+                var open = !state.cascadeCategoryMenuOpen;
+                closeCascadeMenus();
+                if (open && catMenu) {
+                    catMenu.hidden = false;
+                    catBtn.setAttribute('aria-expanded', 'true');
+                    state.cascadeCategoryMenuOpen = true;
+                }
+            };
+        }
+
+        if (actBtn) {
+            actBtn.onclick = function (e) {
+                e.stopPropagation();
+                if (!state.cascadeCategory) return;
+                var open = !state.cascadeActionMenuOpen;
+                closeCascadeMenus();
+                if (open && actMenu) {
+                    actMenu.hidden = false;
+                    actBtn.setAttribute('aria-expanded', 'true');
+                    state.cascadeActionMenuOpen = true;
+                }
+            };
+        }
+
+        if (catMenu) {
+            catMenu.querySelectorAll('[data-cascade-category]').forEach(function (opt) {
+                opt.onclick = function (e) {
+                    e.stopPropagation();
+                    selectCascadeCategory(opt.getAttribute('data-cascade-category'), entry);
+                };
+            });
+        }
+
+        if (actMenu) {
+            actMenu.querySelectorAll('[data-cascade-action]').forEach(function (opt) {
+                opt.onclick = function (e) {
+                    e.stopPropagation();
+                    selectCascadeAction(opt.getAttribute('data-cascade-action'), entry);
+                };
+            });
+        }
+
+        if (!state.cascadeDocBound) {
+            state.cascadeDocBound = true;
+            document.addEventListener('click', function (e) {
+                if (!state.cascadeCategoryMenuOpen && !state.cascadeActionMenuOpen) return;
+                if (e.target.closest('#cascadeFlow')) return;
+                closeCascadeMenus();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closeCascadeMenus();
+            });
+        }
+    }
+
+    function buildVeloProductTagsHtml(ticket, client) {
+        var products = client && client.produtos ? client.produtos.slice() : [];
+        var prod = (ticket.lateralForm && ticket.lateralForm.produto) || '';
+        if (prod && products.indexOf(prod) < 0) products.unshift(prod);
+        if (!products.length && prod) products = [prod];
+        if (!products.length) return '<span class="ticket-client-profile__empty">—</span>';
+        return products.map(function (p) {
+            var lower = String(p).toLowerCase();
+            var cls = 'velo-tag--default';
+            if (lower.indexOf('móvel') >= 0 || lower.indexOf('movel') >= 0) cls = 'velo-tag--mobile';
+            else if (lower.indexOf('combo') >= 0) cls = 'velo-tag--combo';
+            else if (lower.indexOf('fibra') >= 0 || lower.indexOf('internet') >= 0) cls = 'velo-tag--fiber';
+            else if (lower.indexOf('tv') >= 0) cls = 'velo-tag--tv';
+            else if (lower.indexOf('fixo') >= 0 || lower.indexOf('telefone') >= 0) cls = 'velo-tag--landline';
+            else if (lower.indexOf('streaming') >= 0) cls = 'velo-tag--streaming';
+            return '<span class="velo-product-tag ' + cls + '">' + escapeHtml(p) + '</span>';
+        }).join('');
+    }
+
+    function getClientEditPopoverHtml() {
+        return '<div class="crm-client-edit-popover" id="clientEditPopover" role="dialog" aria-labelledby="clientEditPopoverTitle" aria-hidden="true" hidden>' +
+            '<button type="button" class="crm-client-edit-popover__close" id="btnCloseClientEdit" title="Fechar" aria-label="Fechar">' +
+            '<i class="ti ti-x"></i></button>' +
+            '<h3 class="crm-client-edit-popover__title" id="clientEditPopoverTitle">Editar contato</h3>' +
+            '<div class="crm-client-edit-popover__fields">' +
+            '<label class="crm-client-edit-popover__label" for="editClientName">Nome</label>' +
+            '<input type="text" class="crm-client-edit-popover__input" id="editClientName" autocomplete="name">' +
+            '<label class="crm-client-edit-popover__label" for="editClientCpf">CPF</label>' +
+            '<input type="text" class="crm-client-edit-popover__input" id="editClientCpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00">' +
+            '<label class="crm-client-edit-popover__label" for="editClientEmail">E-mail</label>' +
+            '<input type="email" class="crm-client-edit-popover__input" id="editClientEmail" autocomplete="email">' +
+            '<label class="crm-client-edit-popover__label" for="editClientPhone">Telefone</label>' +
+            '<input type="tel" class="crm-client-edit-popover__input" id="editClientPhone" autocomplete="tel">' +
+            '</div>' +
+            '<div class="crm-client-edit-popover__footer">' +
+            '<button type="button" class="crm-client-edit-popover__save" id="btnSaveClientEdit">Salvar</button>' +
+            '</div></div>';
+    }
+
+    function getTicketMacroHubHtml(ticketId) {
+        if (typeof window.renderTicketMacroHubHTML === 'function') {
+            return window.renderTicketMacroHubHTML(String(ticketId));
+        }
+        return '<div class="ticket-macro-hub">' +
+            '<select class="ticket-macro-select" aria-label="Central de opções de resposta" ' +
+            'onchange="applyTicketMacroFromSelect(this, \'' + ticketId + '\')">' +
+            '<option value="">Central de opções</option>' +
+            '<option value="F1">F1 — Saudação padrão</option>' +
+            '<option value="F2">F2 — Aguardar retorno</option>' +
+            '<option value="F3">F3 — Escalonamento</option>' +
+            '<option value="F4">F4 — Encerramento NPS</option>' +
+            '</select></div>';
+    }
+
+    function getComposePanelHtml(ticketId) {
+        var tid = String(ticketId);
+        return '<div class="ticket-response octa-comment-panel crm-ticket-response">' +
+            '<div class="octa-comment-panel-row">' +
+            '<div class="octa-panel-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>' +
+            '<div class="octa-panel-box">' +
+            '<div class="response-tabs octa-nav-tabs">' +
+            '<button type="button" class="response-tab octa-nav-tab octa-tab-public active" data-tab="public-' + tid + '" data-compose="public">' +
+            '<i class="fas fa-envelope"></i> Resposta pública</button>' +
+            '<button type="button" class="response-tab octa-nav-tab octa-tab-internal" data-tab="internal-' + tid + '" data-compose="internal">' +
+            '<i class="fas fa-edit"></i> Anotação interna</button></div>' +
+            '<div class="response-content octa-response-panel-body">' +
+            '<div class="response-tab-content active" id="public-' + tid + '">' +
+            '<div class="response-form">' +
+            '<textarea class="response-textarea" id="publicResponse-' + tid + '" data-ai-skip="true" placeholder="Digite sua resposta ao cliente..." rows="5"></textarea>' +
+            '<div class="response-actions ticket-response-actions">' +
+            getTicketMacroHubHtml(tid) +
+            '<button type="button" class="btn-secondary" id="btnCrmAiAssistant">' +
+            '<i class="fas fa-robot"></i> Assistente IA</button></div></div></div>' +
+            '<div class="response-tab-content" id="internal-' + tid + '">' +
+            '<div class="response-form internal-form">' +
+            '<div class="internal-note-header">' +
+            '<i class="fas fa-lock"></i>' +
+            '<span>Anotação interna — não será enviada ao cliente</span></div>' +
+            '<textarea class="response-textarea internal-textarea" id="internalResponse-' + tid + '" data-ai-skip="true" placeholder="Digite uma anotação interna..." rows="5"></textarea>' +
+            '</div></div></div></div></div></div>' +
+            '<div class="crm-ticket-compose-footer">' +
+            '<div class="crm-send-status" id="crmSendStatus">' +
+            '<button type="button" class="crm-send-status__trigger crm-send-status__trigger--andamento" id="crmStatusDropdown" aria-haspopup="listbox" aria-expanded="false">' +
+            'Enviar como: Em Andamento <i class="ti ti-chevron-down"></i></button>' +
+            '<div class="crm-send-status__menu" id="crmStatusMenu" role="listbox" hidden>' +
+            SEND_STATUS_OPTIONS.map(function (opt) {
+                return '<button type="button" class="crm-send-status__option crm-send-status__option--' + opt.cls + '" role="option" data-send-status="' + opt.id + '">' + opt.label + '</button>';
+            }).join('') +
+            '</div></div></div>';
+    }
+
+    function getMainTicketHtml(ticketId) {
+        return '<div class="crm-client-profile-bar">' +
+            '<section class="ticket-client-profile ticket-client-profile--compact" id="ticketClientProfile" aria-label="Perfil do cliente">' +
+            '<div class="ticket-client-profile__row ticket-client-profile__row--top">' +
+            '<span class="ticket-client-profile__name-wrap" id="headerInfo">' +
+            '<strong class="ticket-client-profile__name" id="profileName"></strong>' +
+            '<button type="button" class="crm-edit-client-btn" id="btnEditClient" title="Editar contato" aria-expanded="false" aria-controls="clientEditPopover">' +
+            '<i class="ti ti-pencil"></i></button>' +
+            getClientEditPopoverHtml() +
+            '</span>' +
+            '<span class="ticket-client-profile__contact"><i class="fas fa-envelope"></i> <span id="profileEmail"></span></span>' +
+            '<span class="ticket-client-profile__contact"><i class="fas fa-phone"></i> <span id="profilePhone"></span></span>' +
+            '</div>' +
+            '<div class="ticket-client-profile__row ticket-client-profile__row--bottom">' +
+            '<span class="ticket-client-profile__cpf"><span class="ticket-client-profile__label">CPF</span> <span id="profileCpf"></span></span>' +
+            '<span class="ticket-client-profile__products" id="profileProducts"></span>' +
+            '</div>' +
+            '<button type="button" class="btn-secondary btn-sm ticket-client-history-btn" id="btnClientHistory">' +
+            '<i class="fas fa-history"></i> Histórico de tickets</button>' +
+            '</section></div>' +
+            '<nav class="tabs-top" aria-label="Navegação do ticket">' +
+            '<button type="button" class="tab-btn' + (state.mainTab === 'conversa' ? ' is-active' : '') + '" data-main-tab="conversa">' +
+            '<i class="ti ti-message-2"></i> Conversa</button>' +
+            '<button type="button" class="tab-btn' + (state.mainTab === 'notas' ? ' is-active' : '') + '" data-main-tab="notas">' +
+            '<i class="ti ti-file-text"></i> Notas</button></nav>' +
+            '<div class="crm-conversation-wrap">' +
+            '<div class="tab-panel' + (state.mainTab === 'conversa' ? ' is-active' : '') + '" data-panel="conversa">' +
             '<div class="conversation" id="conversation"></div>' +
-            '<div class="compose-area">' +
-            '<div class="compose-tabs">' +
-            '<button type="button" class="compose-tab is-active" data-compose="public">Resposta pública</button>' +
-            '<button type="button" class="compose-tab" data-compose="internal">Anotação interna</button></div>' +
-            '<div class="compose-box" id="composeBox" data-mode="public">' +
-            '<textarea class="compose-textarea compose-textarea--public" id="composePublic" placeholder="Escreva sua resposta…"></textarea>' +
-            '<textarea class="compose-textarea compose-textarea--internal" id="composeInternal" placeholder="Anotação interna…"></textarea></div>' +
-            '<div class="compose-footer">' +
-            '<div class="compose-tools">' +
-            '<button type="button" class="tool-btn"><i class="ti ti-paperclip"></i></button>' +
-            '<button type="button" class="tool-btn"><i class="ti ti-template"></i></button>' +
-            '<button type="button" class="tool-btn"><i class="ti ti-robot"></i></button></div>' +
-            '<div class="compose-actions">' +
-            '<button type="button" class="status-dropdown" id="crmStatusDropdown">Enviar como: Em andamento <i class="ti ti-chevron-down"></i></button>' +
-            '<button type="button" class="btn-send" id="btnSend">Enviar</button>' +
-            '</div></div></div></div>' +
-            '<div class="tab-panel tab-panel--placeholder" data-panel="notas"><p>Nenhuma nota interna registrada.</p></div>' +
-            '<div class="tab-panel tab-panel--placeholder" data-panel="historico"><p>Histórico completo do cliente.</p></div>';
+            getComposePanelHtml(ticketId) +
+            '</div>' +
+            '<div class="tab-panel tab-panel--placeholder' + (state.mainTab === 'notas' ? ' is-active' : '') + '" data-panel="notas">' +
+            '<p>Nenhuma nota interna registrada.</p></div></div>';
     }
 
     function renderQueueList() {
@@ -462,15 +1119,16 @@
         if (!list) return;
 
         if (!entries.length) {
-            list.innerHTML = '<li class="crm-empty-state" style="padding:16px;font-size:12px;">Nenhum ticket nesta fila</li>';
+            list.innerHTML = '<li class="crm-empty-state" style="padding:16px;font-size:14px;">Nenhum ticket nesta fila</li>';
             return;
         }
 
         list.innerHTML = entries.map(function (entry) {
             var t = entry.ticket;
+            normalizeTicketForDeskV2(t);
             var meta = statusMeta(t, entry.queueId);
             var active = String(t.id) === String(state.activeTicketId) ? ' is-active' : '';
-            var channel = (t.lateralForm && t.lateralForm.canal) || t.channel || t.source || '—';
+            var sla = getTicketSlaStatus(t);
             var tags = buildTags(t).map(function (tag) {
                 return '<span class="crm-tag">' + escapeHtml(tag) + '</span>';
             }).join('');
@@ -478,11 +1136,11 @@
                 '<div class="crm-ticket-card__top">' +
                 '<span class="crm-ticket-card__name">' + escapeHtml(t.clientName || t.solicitante || 'Cliente') + '</span>' +
                 '<span class="status-badge status-badge--' + meta.cls + '">' + escapeHtml(meta.label) + '</span></div>' +
-                '<div class="crm-ticket-card__subject">' + escapeHtml(t.title || t.description || '') + '</div>' +
+                '<div class="crm-ticket-card__subject">' + escapeHtml(getTicketTitle(t)) + '</div>' +
                 '<div class="crm-ticket-card__meta">' +
-                '<span class="crm-ticket-card__channel"><i class="ti ' + channelIcon(channel) + '"></i> ' + escapeHtml(channel) + '</span>' +
                 '<span>' + escapeHtml(formatTicketDate(t.updatedAt || t.createdAt)) + '</span></div>' +
-                '<div class="crm-ticket-card__tags">' + tags + '</div></li>';
+                '<div class="crm-ticket-card__tags">' + tags + '</div>' +
+                '<span class="crm-ticket-card__sla crm-ticket-card__sla--' + sla + '" title="' + escapeHtml(SLA_LABELS[sla]) + '" aria-label="' + escapeHtml(SLA_LABELS[sla]) + '"></span></li>';
         }).join('');
     }
 
@@ -507,43 +1165,41 @@
         if (!root || !entry) return;
 
         var t = entry.ticket;
+        normalizeTicketForDeskV2(t);
         var client = lookupClient((t.lateralForm && t.lateralForm.cpf) || t.clientCPF);
         var name = t.clientName || t.solicitante || 'Cliente';
-        var cpf = (t.lateralForm && t.lateralForm.cpf) ? t.clientCPF : (t.clientCPF || (client && client.cpf) || '—');
+        var cpf = formatCpf((t.lateralForm && t.lateralForm.cpf) || t.clientCPF || (client && client.cpf) || '') || '—';
         var iaReply = buildIaReply(t);
         var iaTab = buildIaTabulation(t);
         var convMsgs = buildConversationMessages(t);
 
         var main = $('#crmMainContent');
         var right = $('#crmRightPanel');
-        if (main) main.innerHTML = getMainTicketHtml();
+        if (main) main.innerHTML = getMainTicketHtml(t.id);
         if (right) right.style.display = '';
 
-        var avatar = $('#headerAvatar');
-        var headerName = $('#headerName');
-        var sub = $('#headerSub');
-        var products = $('#headerProducts');
-        if (avatar) avatar.textContent = getInitials(name);
-        if (headerName) headerName.textContent = name;
-        if (sub) sub.textContent = 'CPF ' + cpf + ' · #' + t.id;
+        state.composeMode = 'public';
+        closeCascadeMenus();
+        closeSendStatusMenu();
 
-        if (products) {
-            products.innerHTML = buildProducts(t, client).map(function (p) {
-                return '<span class="product-pill product-pill--' + p.cls + '"><i class="ti ' + p.icon + '"></i> ' + escapeHtml(p.label) + '</span>';
-            }).join('');
-        }
+        stripComposeAiReview();
+        populateClientProfile(t, client);
 
         var conv = $('#conversation');
         if (conv) {
             conv.innerHTML = convMsgs.map(renderMessage).join('') +
-                '<div class="ia-suggestion-bar"><span class="ia-suggestion-bar__label">IA</span>' +
+                '<div class="ia-suggestion-bar" id="iaSuggestionBar">' +
+                '<span class="ia-suggestion-bar__label">IA</span>' +
                 '<span class="ia-suggestion-bar__text" id="iaReplyText">' + escapeHtml(iaReply) + '</span>' +
-                '<button type="button" class="ia-suggestion-bar__btn" id="btnUseReply">Usar resposta</button></div>';
+                '<div class="ia-suggestion-bar__actions">' +
+                '<button type="button" class="ia-suggestion-bar__btn" id="btnUseReply">Usar resposta</button>' +
+                '<button type="button" class="ia-suggestion-bar__btn ia-suggestion-bar__btn--dismiss" id="btnDismissReply">Não usar</button>' +
+                '</div></div>';
             conv.scrollTop = conv.scrollHeight;
         }
 
-        var ta = $('#composePublic');
-        if (ta) ta.placeholder = 'Escreva sua resposta para ' + name + '…';
+        var ta = document.getElementById('publicResponse-' + t.id);
+        if (ta) ta.placeholder = 'Digite sua resposta ao cliente…';
 
         var thermo = client && client.termometro != null ? client.termometro : 38;
         var thermoLabel = client && client.termometroLabel ? client.termometroLabel : (thermo >= 55 ? 'Atenção' : 'Estável');
@@ -556,18 +1212,15 @@
         if (fill) { fill.style.width = thermo + '%'; fill.style.background = thermoColor; }
         if (tLabel) { tLabel.textContent = thermoLabel; tLabel.style.color = thermoColor; }
 
-        var email = $('#contactEmail');
-        var phone = $('#contactPhone');
-        var cpfEl = $('#contactCpf');
-        if (email) email.textContent = (client && client.email) || '—';
-        if (phone) phone.textContent = (client && client.telefone) || '—';
-        if (cpfEl) cpfEl.textContent = 'CPF ' + (client && client.cpf ? client.cpf : cpf);
-
         var lf = t.lateralForm || {};
+        var selResponsavel = $('#selResponsavel');
         var selCanal = $('#selCanal');
         var selTipo = $('#selTipo');
         var selProduto = $('#selProduto');
         var selMotivo = $('#selMotivo');
+        if (selResponsavel) {
+            selResponsavel.value = lf.responsavel || t.responsibleAgent || t.assignedTo || getAgentName();
+        }
         if (selCanal) setSelectValue(selCanal, lf.canal || t.channel || 'WhatsApp');
         if (selTipo) setSelectValue(selTipo, lf.classificacaoTipo || 'Solicitação');
         if (selProduto) setSelectValue(selProduto, lf.produto || 'Internet Fibra');
@@ -576,13 +1229,223 @@
         var iaText = $('#iaTabulationText');
         if (iaText) iaText.textContent = iaTab;
 
+        restoreCascadeFromTicket(entry);
+        restoreEscalonarFromTicket(entry);
+        bindCascadeFlowEvents(entry);
+        bindEscalonarEvents(entry);
+
         bindMainEvents(entry, iaReply);
+        closeClientEditPopover();
+        closeSendStatusMenu();
+    }
+
+    function stripComposeAiReview() {
+        var root = $('#velodeskDeskV2Root');
+        if (!root) return;
+        root.querySelectorAll('.octa-panel-box .ai-review-wrap').forEach(function (wrap) {
+            var ta = wrap.querySelector('textarea');
+            if (ta && wrap.parentNode) {
+                wrap.parentNode.insertBefore(ta, wrap);
+                wrap.remove();
+                delete ta.dataset.aiReviewBound;
+            }
+        });
+    }
+
+    function syncComposeTabState(ticketId, tabType) {
+        state.composeMode = tabType;
+        if (typeof window.switchResponseTabInTab === 'function') {
+            window.switchResponseTabInTab(ticketId, tabType);
+        } else {
+            var publicTab = document.querySelector('#velodeskDeskV2Root .response-tab[data-tab="public-' + ticketId + '"]');
+            var internalTab = document.querySelector('#velodeskDeskV2Root .response-tab[data-tab="internal-' + ticketId + '"]');
+            var publicContent = document.getElementById('public-' + ticketId);
+            var internalContent = document.getElementById('internal-' + ticketId);
+            if (tabType === 'public') {
+                if (publicTab) publicTab.classList.add('active');
+                if (internalTab) internalTab.classList.remove('active');
+                if (publicContent) publicContent.classList.add('active');
+                if (internalContent) internalContent.classList.remove('active');
+            } else {
+                if (internalTab) internalTab.classList.add('active');
+                if (publicTab) publicTab.classList.remove('active');
+                if (internalContent) internalContent.classList.add('active');
+                if (publicContent) publicContent.classList.remove('active');
+            }
+        }
+    }
+
+    function populateClientProfile(ticket, client) {
+        var fields = getClientContactFields(ticket, client);
+        var cpfDisplay = formatCpf((ticket.lateralForm && ticket.lateralForm.cpf) || ticket.clientCPF || (client && client.cpf) || '') || '—';
+
+        var profile = $('#ticketClientProfile');
+        if (profile) profile.id = 'ticket-client-profile-' + ticket.id;
+
+        var nameEl = $('#profileName');
+        var emailEl = $('#profileEmail');
+        var phoneEl = $('#profilePhone');
+        var cpfEl = $('#profileCpf');
+        var productsEl = $('#profileProducts');
+
+        if (nameEl) nameEl.textContent = fields.name || '—';
+        if (emailEl) emailEl.textContent = fields.email || '—';
+        if (phoneEl) phoneEl.textContent = fields.phone || '—';
+        if (cpfEl) cpfEl.textContent = cpfDisplay;
+        if (productsEl) productsEl.innerHTML = buildVeloProductTagsHtml(ticket, client);
+
+        var histBtn = $('#btnClientHistory');
+        if (histBtn) histBtn.setAttribute('data-ticket-id', ticket.id);
+    }
+
+    function openClientEditPopover(entry) {
+        var popover = $('#clientEditPopover');
+        var btn = $('#btnEditClient');
+        if (!popover || !entry) return;
+
+        var t = entry.ticket;
+        var client = lookupClient((t.lateralForm && t.lateralForm.cpf) || t.clientCPF);
+        var fields = getClientContactFields(t, client);
+
+        var nameIn = $('#editClientName');
+        var cpfIn = $('#editClientCpf');
+        var emailIn = $('#editClientEmail');
+        var phoneIn = $('#editClientPhone');
+        if (nameIn) nameIn.value = fields.name;
+        if (cpfIn) cpfIn.value = fields.cpf;
+        if (emailIn) emailIn.value = fields.email;
+        if (phoneIn) phoneIn.value = fields.phone;
+
+        popover.hidden = false;
+        popover.setAttribute('aria-hidden', 'false');
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'true');
+            btn.classList.add('is-active');
+        }
+        state.clientEditOpen = true;
+
+        if (nameIn) {
+            setTimeout(function () { nameIn.focus(); nameIn.select(); }, 0);
+        }
+    }
+
+    function closeClientEditPopover() {
+        var popover = $('#clientEditPopover');
+        var btn = $('#btnEditClient');
+        if (popover) {
+            popover.hidden = true;
+            popover.setAttribute('aria-hidden', 'true');
+        }
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            btn.classList.remove('is-active');
+        }
+        state.clientEditOpen = false;
+    }
+
+    function saveClientEdit(entry) {
+        if (!entry) return;
+        var t = entry.ticket;
+        var nameIn = $('#editClientName');
+        var cpfIn = $('#editClientCpf');
+        var emailIn = $('#editClientEmail');
+        var phoneIn = $('#editClientPhone');
+
+        var name = nameIn ? nameIn.value.trim() : '';
+        var cpfRaw = cpfIn ? cpfIn.value.trim() : '';
+        var email = emailIn ? emailIn.value.trim() : '';
+        var phone = phoneIn ? phoneIn.value.trim() : '';
+        var cpfDigits = normalizeCpf(cpfRaw);
+        var oldCpfDigits = normalizeCpf((t.lateralForm && t.lateralForm.cpf) || t.clientCPF);
+
+        if (!name) {
+            if (typeof window.showNotification === 'function') showNotification('Informe o nome do contato.', 'warning');
+            if (nameIn) nameIn.focus();
+            return;
+        }
+
+        t.clientName = name;
+        t.solicitante = name;
+        t.clientEmail = email;
+        t.clientPhone = phone;
+        t.clientCPF = formatCpf(cpfDigits) || cpfRaw;
+        if (!t.lateralForm) t.lateralForm = {};
+        t.lateralForm.cpf = cpfDigits;
+
+        try {
+            var db = JSON.parse(localStorage.getItem('velodeskClientDB') || '{}');
+            var existing = oldCpfDigits ? db[oldCpfDigits] : null;
+            if (oldCpfDigits && cpfDigits && oldCpfDigits !== cpfDigits && db[oldCpfDigits]) {
+                delete db[oldCpfDigits];
+            }
+            var clientRecord = (cpfDigits && db[cpfDigits]) || existing || {};
+            clientRecord.name = name;
+            clientRecord.email = email;
+            clientRecord.telefone = phone;
+            if (cpfDigits) {
+                clientRecord.cpf = formatCpf(cpfDigits);
+                db[cpfDigits] = clientRecord;
+            }
+            localStorage.setItem('velodeskClientDB', JSON.stringify(db));
+        } catch (e) { /* ignore */ }
+
+        t.updatedAt = new Date().toISOString();
+        saveKanbanColumns(getKanbanColumns());
+        closeClientEditPopover();
+        renderMainTicket(entry);
+        renderTicketCards();
+        if (typeof window.showNotification === 'function') showNotification('Contato atualizado.', 'success');
+    }
+
+    function bindClientEditEvents(entry) {
+        var btnEdit = $('#btnEditClient');
+        var btnClose = $('#btnCloseClientEdit');
+        var btnSave = $('#btnSaveClientEdit');
+        var popover = $('#clientEditPopover');
+
+        if (btnEdit) {
+            btnEdit.onclick = function (e) {
+                e.stopPropagation();
+                if (state.clientEditOpen) closeClientEditPopover();
+                else openClientEditPopover(entry);
+            };
+        }
+        if (btnClose) {
+            btnClose.onclick = function (e) {
+                e.stopPropagation();
+                closeClientEditPopover();
+            };
+        }
+        if (btnSave) {
+            btnSave.onclick = function (e) {
+                e.stopPropagation();
+                saveClientEdit(entry);
+            };
+        }
+        if (popover) {
+            popover.onclick = function (e) { e.stopPropagation(); };
+        }
+
+        if (!state.clientEditDocBound) {
+            state.clientEditDocBound = true;
+            document.addEventListener('click', function (e) {
+                if (!state.clientEditOpen) return;
+                var root = $('#velodeskDeskV2Root');
+                if (!root || !root.contains(e.target)) return;
+                if (e.target.closest('#clientEditPopover') || e.target.closest('#btnEditClient')) return;
+                closeClientEditPopover();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && state.clientEditOpen) closeClientEditPopover();
+            });
+        }
     }
 
     function bindMainEvents(entry, iaReply) {
         $$('#velodeskDeskV2Root .tab-btn[data-main-tab]').forEach(function (btn) {
             btn.onclick = function () {
                 var tab = btn.getAttribute('data-main-tab');
+                state.mainTab = tab;
                 $$('#velodeskDeskV2Root .tab-btn[data-main-tab]').forEach(function (b) { b.classList.remove('is-active'); });
                 btn.classList.add('is-active');
                 $$('#velodeskDeskV2Root .tab-panel[data-panel]').forEach(function (p) {
@@ -591,35 +1454,39 @@
             };
         });
 
-        $$('#velodeskDeskV2Root .compose-tab').forEach(function (tab) {
+        $$('#velodeskDeskV2Root .octa-nav-tab').forEach(function (tab) {
             tab.onclick = function () {
-                state.composeMode = tab.getAttribute('data-compose');
-                $$('#velodeskDeskV2Root .compose-tab').forEach(function (t) { t.classList.remove('is-active'); });
-                tab.classList.add('is-active');
-                var box = $('#composeBox');
-                if (box) box.setAttribute('data-mode', state.composeMode);
+                var mode = tab.getAttribute('data-compose') || 'public';
+                syncComposeTabState(entry.ticket.id, mode);
             };
         });
-
-        var composePublic = $('#composePublic');
-        var composeBox = $('#composeBox');
-        if (composePublic && composeBox) {
-            composePublic.onfocus = function () { composeBox.classList.add('is-focused'); };
-            composePublic.onblur = function () { composeBox.classList.remove('is-focused'); };
-        }
+        syncComposeTabState(entry.ticket.id, state.composeMode || 'public');
 
         var btnUse = $('#btnUseReply');
         if (btnUse) {
             btnUse.onclick = function () {
-                var ta = $('#composePublic');
-                if (ta) { ta.value = iaReply; ta.focus(); if (composeBox) composeBox.classList.add('is-focused'); }
+                var ta = document.getElementById('publicResponse-' + entry.ticket.id);
+                if (ta) { ta.value = iaReply; ta.focus(); }
             };
         }
 
-        var btnSend = $('#btnSend');
-        if (btnSend) {
-            btnSend.onclick = function () { sendAgentMessage(entry); };
+        var btnDismiss = $('#btnDismissReply');
+        if (btnDismiss) {
+            btnDismiss.onclick = function () {
+                var bar = $('#iaSuggestionBar');
+                if (bar) bar.remove();
+            };
         }
+
+        var btnAi = $('#btnCrmAiAssistant');
+        if (btnAi) {
+            btnAi.onclick = function () {
+                if (typeof window.openAIChatbot === 'function') window.openAIChatbot();
+            };
+        }
+
+        bindSendStatusEvents(entry);
+        setTimeout(stripComposeAiReview, 0);
 
         var btnApply = $('#btnApplyTabulation');
         if (btnApply) {
@@ -637,11 +1504,107 @@
                 if (typeof navigateToPage === 'function') navigateToPage('chat');
             };
         }
+
+        var btnHistory = $('#btnClientHistory');
+        if (btnHistory) {
+            btnHistory.onclick = function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var ticketId = entry.ticket.id;
+                if (typeof window.openClientFromTicket === 'function') {
+                    window.openClientFromTicket(ticketId);
+                } else if (typeof window.showNotification === 'function') {
+                    showNotification('Histórico de tickets indisponível.', 'warning');
+                }
+            };
+        }
+
+        bindClientEditEvents(entry);
     }
 
-    function sendAgentMessage(entry) {
+    function closeSendStatusMenu() {
+        var menu = $('#crmStatusMenu');
+        var trigger = $('#crmStatusDropdown');
+        if (menu) menu.hidden = true;
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+        state.sendStatusMenuOpen = false;
+    }
+
+    function openSendStatusMenu() {
+        var menu = $('#crmStatusMenu');
+        var trigger = $('#crmStatusDropdown');
+        if (menu) menu.hidden = false;
+        if (trigger) trigger.setAttribute('aria-expanded', 'true');
+        state.sendStatusMenuOpen = true;
+    }
+
+    function bindSendStatusEvents(entry) {
+        var trigger = $('#crmStatusDropdown');
+        var menu = $('#crmStatusMenu');
+
+        if (trigger) {
+            trigger.onclick = function (e) {
+                e.stopPropagation();
+                if (state.sendStatusMenuOpen) closeSendStatusMenu();
+                else openSendStatusMenu();
+            };
+        }
+
+        if (menu) {
+            $$('#velodeskDeskV2Root .crm-send-status__option').forEach(function (opt) {
+                opt.onclick = function (e) {
+                    e.stopPropagation();
+                    var statusId = opt.getAttribute('data-send-status');
+                    closeSendStatusMenu();
+                    sendAgentMessage(entry, statusId);
+                };
+            });
+        }
+
+        if (!state.sendStatusDocBound) {
+            state.sendStatusDocBound = true;
+            document.addEventListener('click', function (e) {
+                if (!state.sendStatusMenuOpen) return;
+                if (e.target.closest('#crmSendStatus')) return;
+                closeSendStatusMenu();
+            });
+        }
+    }
+
+    function moveTicketToBox(entry, targetBoxId) {
+        if (!entry || !targetBoxId) return;
+        var columns = getKanbanColumns();
+        var ticket = entry.ticket;
+        var ticketId = String(ticket.id);
+
+        columns.forEach(function (box) {
+            if (!box.tickets) return;
+            box.tickets = box.tickets.filter(function (t) { return String(t.id) !== ticketId; });
+        });
+
+        var target = columns.find(function (b) { return b.id === targetBoxId; });
+        if (!target) return;
+        if (!target.tickets) target.tickets = [];
+        target.tickets.push(ticket);
+        saveKanbanColumns(columns);
+        entry.boxId = targetBoxId;
+        entry.queueId = mapTicketQueueId(ticket, targetBoxId);
+    }
+
+    function applySendStatus(entry, queueId) {
+        var statusMap = {
+            'em-andamento': { box: 'em-andamento', status: 'em-aberto' },
+            'pendente': { box: 'em-espera', status: 'pendente' },
+            'resolvidos': { box: 'resolvidos', status: 'resolvido' }
+        };
+        var cfg = statusMap[queueId] || statusMap['em-andamento'];
+        entry.ticket.status = cfg.status;
+        moveTicketToBox(entry, cfg.box);
+    }
+
+    function sendAgentMessage(entry, sendStatus) {
         if (state.composeMode !== 'public') return;
-        var ta = $('#composePublic');
+        var ta = document.getElementById('publicResponse-' + entry.ticket.id);
         var text = ta && ta.value.trim();
         if (!text || !entry) return;
 
@@ -656,9 +1619,11 @@
         });
         entry.ticket.updatedAt = now;
 
-        var columns = getKanbanColumns();
-        saveKanbanColumns(columns);
+        applySendStatus(entry, sendStatus || 'em-andamento');
+        saveKanbanColumns(getKanbanColumns());
         if (ta) ta.value = '';
+        renderQueueList();
+        renderTicketCards();
         renderMainTicket(entry);
         if (typeof window.showNotification === 'function') showNotification('Resposta enviada.', 'success');
     }
@@ -685,14 +1650,23 @@
         if (!entry) return;
         var t = entry.ticket;
         if (!t.lateralForm) t.lateralForm = {};
+        var selResponsavel = $('#selResponsavel');
         var selCanal = $('#selCanal');
         var selTipo = $('#selTipo');
         var selProduto = $('#selProduto');
         var selMotivo = $('#selMotivo');
+        if (selResponsavel) t.lateralForm.responsavel = selResponsavel.value;
+        if (selResponsavel) {
+            t.responsibleAgent = selResponsavel.value;
+            t.assignedTo = selResponsavel.value;
+        }
         if (selCanal) t.lateralForm.canal = selCanal.value;
         if (selTipo) t.lateralForm.classificacaoTipo = selTipo.value;
         if (selProduto) t.lateralForm.produto = selProduto.value;
         if (selMotivo) t.lateralForm.motivo = selMotivo.value;
+        t.lateralForm.automacaoCategoria = state.cascadeCategory || '';
+        t.lateralForm.automacaoAcao = state.cascadeAction || '';
+        t.lateralForm.escalonar = state.escalonar || '';
         saveKanbanColumns(getKanbanColumns());
         var btn = $('#btnApplyTabulation');
         if (btn) {
@@ -811,10 +1785,72 @@
                 if (typeof navigateToPage === 'function') navigateToPage('dashboard');
             };
         }
+
+        bindPanelCollapseEvents();
+        applyPanelCollapseState();
+    }
+
+    function setQueuePanelCollapsed(collapsed) {
+        state.queuePanelCollapsed = collapsed;
+        var panel = $('#crmQueuePanel');
+        var btn = $('#btnCollapseQueue');
+        if (panel) panel.classList.toggle('is-collapsed', collapsed);
+        if (btn) {
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            btn.title = collapsed ? 'Expandir fila' : 'Recolher fila';
+        }
+        localStorage.setItem('velodeskCrmQueueCollapsed', collapsed ? '1' : '0');
+    }
+
+    function setTicketListCollapsed(collapsed) {
+        state.ticketListCollapsed = collapsed;
+        var panel = $('#crmTicketListPanel');
+        var btn = $('#btnCollapseTickets');
+        if (panel) panel.classList.toggle('is-collapsed', collapsed);
+        if (btn) {
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            btn.title = collapsed ? 'Expandir lista' : 'Recolher lista';
+        }
+        localStorage.setItem('velodeskCrmTicketListCollapsed', collapsed ? '1' : '0');
+    }
+
+    function applyPanelCollapseState() {
+        var q = localStorage.getItem('velodeskCrmQueueCollapsed') === '1';
+        var t = localStorage.getItem('velodeskCrmTicketListCollapsed') === '1';
+        setQueuePanelCollapsed(q);
+        setTicketListCollapsed(t);
+    }
+
+    function bindPanelCollapseEvents() {
+        var btnQueue = $('#btnCollapseQueue');
+        var btnExpandQueue = $('#btnExpandQueue');
+        var btnTickets = $('#btnCollapseTickets');
+        var btnExpandTickets = $('#btnExpandTickets');
+
+        if (btnQueue) {
+            btnQueue.onclick = function (e) {
+                e.stopPropagation();
+                setQueuePanelCollapsed(true);
+            };
+        }
+        if (btnExpandQueue) {
+            btnExpandQueue.onclick = function () { setQueuePanelCollapsed(false); };
+        }
+        if (btnTickets) {
+            btnTickets.onclick = function (e) {
+                e.stopPropagation();
+                setTicketListCollapsed(true);
+            };
+        }
+        if (btnExpandTickets) {
+            btnExpandTickets.onclick = function () { setTicketListCollapsed(false); };
+        }
     }
 
     function pickDefaultTicket() {
         var preferred = getAllCockpitTickets().find(function (e) {
+            return e.queueId === 'em-andamento' && (e.ticket.clientName || '').indexOf('João Pereira') >= 0;
+        }) || getAllCockpitTickets().find(function (e) {
             return e.queueId === 'em-andamento' && (e.ticket.clientName || '').indexOf('Maria') >= 0;
         });
         if (preferred) return preferred.ticket.id;
@@ -822,6 +1858,28 @@
         if (inQueue.length) return inQueue[0].ticket.id;
         var any = getAllCockpitTickets();
         return any.length ? any[0].ticket.id : null;
+    }
+
+    function patchEcosystemForDeskV2() {
+        if (window.__velodeskDeskV2EcosystemPatched) return;
+        window.__velodeskDeskV2EcosystemPatched = true;
+
+        var origOpenFromModal = window.openClientTicketFromModal;
+        window.openClientTicketFromModal = function (ticketId) {
+            if (typeof window.closeEcosystemModal === 'function') {
+                window.closeEcosystemModal();
+            }
+            if (isDeskV2Mode() && document.getElementById('velodeskDeskV2Root')) {
+                var entry = findTicketEntry(ticketId);
+                if (entry) {
+                    selectTicket(ticketId);
+                    return;
+                }
+            }
+            if (typeof origOpenFromModal === 'function') {
+                origOpenFromModal(ticketId);
+            }
+        };
     }
 
     function mountDeskV2() {
@@ -837,6 +1895,7 @@
         root.innerHTML = getShellHtml();
 
         ensureDeskV2PrototypeTickets();
+        migrateAllTicketsForDeskV2();
 
         state.activeQueue = 'em-andamento';
         state.activeTicketId = pickDefaultTicket();
@@ -844,6 +1903,9 @@
         renderQueueList();
         renderTicketCards();
         bindShellEvents();
+        patchEcosystemForDeskV2();
+        bindCascadeFlowEvents(null);
+        updateCascadeFlowUI();
 
         if (state.activeTicketId) {
             renderMainTicket(findTicketEntry(state.activeTicketId));

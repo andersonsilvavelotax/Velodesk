@@ -521,6 +521,8 @@ function renderTicketMacroHubHTML(ticketId) {
         '</select></div>';
 }
 
+window.renderTicketMacroHubHTML = renderTicketMacroHubHTML;
+
 window.applyTicketMacroFromSelect = function (selectEl, ticketId) {
     const key = selectEl && selectEl.value;
     if (!key) return;

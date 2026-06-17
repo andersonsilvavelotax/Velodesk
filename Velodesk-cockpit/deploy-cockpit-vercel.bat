@@ -33,10 +33,16 @@ mkdir "%DEPLOY%"
 
 for %%F in (
     index.html
+    velodesk-crm.html
     styles.css
     velodesk-ecosystem.css
     velodesk-ecosystem.js
+    velodesk-crm.css
+    velodesk-crm.js
+    velodesk-desk-v2.js
     cockpit.css
+    cockpit-crm-ui.css
+    cockpit-crm-ui.js
     velotax-theme.css
     cockpit-ux-enhancements.css
     cockpit-config.js
@@ -44,6 +50,7 @@ for %%F in (
     cockpit-supervisor.js
     cockpit-supervisor-ux.js
     cockpit-ux-enhancements.js
+    cockpit-profiles.js
     login-simple-fixed.js
     seed-demo-tickets.js
     seed-demo-data.js
