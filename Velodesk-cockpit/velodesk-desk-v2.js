@@ -1053,7 +1053,26 @@
     }
 
     function getMainTicketHtml(ticketId) {
-        return '<nav class="tabs-top" aria-label="Navegação do ticket">' +
+        return '<div class="crm-client-profile-bar">' +
+            '<section class="ticket-client-profile ticket-client-profile--compact" id="ticketClientProfile" aria-label="Perfil do cliente">' +
+            '<div class="ticket-client-profile__row ticket-client-profile__row--top">' +
+            '<span class="ticket-client-profile__name-wrap" id="headerInfo">' +
+            '<strong class="ticket-client-profile__name" id="profileName"></strong>' +
+            '<button type="button" class="crm-edit-client-btn" id="btnEditClient" title="Editar contato" aria-expanded="false" aria-controls="clientEditPopover">' +
+            '<i class="ti ti-pencil"></i></button>' +
+            getClientEditPopoverHtml() +
+            '</span>' +
+            '<span class="ticket-client-profile__contact"><i class="fas fa-envelope"></i> <span id="profileEmail"></span></span>' +
+            '<span class="ticket-client-profile__contact"><i class="fas fa-phone"></i> <span id="profilePhone"></span></span>' +
+            '</div>' +
+            '<div class="ticket-client-profile__row ticket-client-profile__row--bottom">' +
+            '<span class="ticket-client-profile__cpf"><span class="ticket-client-profile__label">CPF</span> <span id="profileCpf"></span></span>' +
+            '<span class="ticket-client-profile__products" id="profileProducts"></span>' +
+            '</div>' +
+            '<button type="button" class="btn-secondary btn-sm ticket-client-history-btn" id="btnClientHistory">' +
+            '<i class="fas fa-history"></i> Histórico de tickets</button>' +
+            '</section></div>' +
+            '<nav class="tabs-top" aria-label="Navegação do ticket">' +
             '<button type="button" class="tab-btn' + (state.mainTab === 'conversa' ? ' is-active' : '') + '" data-main-tab="conversa">' +
             '<i class="ti ti-message-2"></i> Conversa</button>' +
             '<button type="button" class="tab-btn' + (state.mainTab === 'notas' ? ' is-active' : '') + '" data-main-tab="notas">' +
@@ -1154,6 +1173,7 @@
 
         stripComposeAiReview();
         removeFocusContextPanel();
+        populateClientProfile(t, client);
 
         var conv = $('#conversation');
         if (conv) {
