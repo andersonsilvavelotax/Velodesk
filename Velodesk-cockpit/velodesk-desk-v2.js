@@ -573,7 +573,7 @@
             '<aside class="crm-sidebar" aria-label="Navegação">' +
             '<div class="crm-sidebar__logo" title="Velodesk">V</div>' +
             '<nav class="crm-sidebar__nav">' +
-            '<button type="button" class="crm-nav-icon is-active" title="Tickets"><i class="ti ti-ticket"></i></button>' +
+            '<button type="button" class="crm-nav-icon is-active" title="Tickets" data-nav="tickets"><i class="ti ti-ticket"></i></button>' +
             '<button type="button" class="crm-nav-icon" title="Mensagens"><i class="ti ti-message-2"></i><span class="crm-nav-icon__badge"></span></button>' +
             '<button type="button" class="crm-nav-icon" title="Dashboard" data-nav="dashboard"><i class="ti ti-layout-dashboard"></i></button>' +
             '<button type="button" class="crm-nav-icon" title="Relatórios"><i class="ti ti-chart-bar"></i></button>' +
@@ -1776,15 +1776,27 @@
             };
         }
 
-        var navDash = $('[data-nav="dashboard"]');
+        var navDash = $('#velodeskDeskV2Root [data-nav="dashboard"]');
         if (navDash) {
             navDash.onclick = function () {
-                document.body.classList.remove('desk-v2-mode');
-                var root = $('#velodeskDeskV2Root');
-                if (root) root.style.display = 'none';
+                hideDeskV2ForLegacyNav();
                 if (typeof navigateToPage === 'function') navigateToPage('dashboard');
             };
         }
+
+        var navTickets = $('#velodeskDeskV2Root [data-nav="tickets"]');
+        if (navTickets) {
+            navTickets.onclick = function () {
+                restoreDeskV2();
+            };
+        }
+
+        $$('#velodeskDeskV2Root [data-nav="settings"]').forEach(function (btn) {
+            btn.onclick = function () {
+                hideDeskV2ForLegacyNav();
+                if (typeof navigateToPage === 'function') navigateToPage('config');
+            };
+        });
 
         bindPanelCollapseEvents();
         applyPanelCollapseState();
@@ -1882,6 +1894,40 @@
         };
     }
 
+    function hideDeskV2ForLegacyNav() {
+        document.body.classList.remove('desk-v2-mode');
+        var root = document.getElementById('velodeskDeskV2Root');
+        if (root) root.style.display = 'none';
+    }
+
+    function restoreDeskV2() {
+        if (!isDeskV2Mode()) return false;
+
+        document.body.classList.add('desk-v2-mode');
+        document.title = 'Velodesk CRM — Cockpit';
+
+        var root = document.getElementById('velodeskDeskV2Root');
+        if (!root || !root.querySelector('#crmQueuePanel')) {
+            mountDeskV2();
+            return true;
+        }
+
+        root.style.display = '';
+        renderQueueList();
+        renderTicketCards();
+
+        if (state.activeTicketId && findTicketEntry(state.activeTicketId)) {
+            renderMainTicket(findTicketEntry(state.activeTicketId));
+        } else {
+            state.activeTicketId = pickDefaultTicket();
+            if (state.activeTicketId) {
+                renderMainTicket(findTicketEntry(state.activeTicketId));
+            }
+        }
+
+        return true;
+    }
+
     function mountDeskV2() {
         document.body.classList.add('desk-v2-mode');
         document.title = 'Velodesk CRM — Cockpit';
@@ -1892,6 +1938,7 @@
             root.id = 'velodeskDeskV2Root';
             document.body.appendChild(root);
         }
+        root.style.display = '';
         root.innerHTML = getShellHtml();
 
         ensureDeskV2PrototypeTickets();
@@ -1922,7 +1969,12 @@
         mountDeskV2();
     }
 
-    window.VelodeskDeskV2 = { mount: mountDeskV2, isActive: isDeskV2Mode };
+    window.VelodeskDeskV2 = {
+        mount: mountDeskV2,
+        restore: restoreDeskV2,
+        hideForLegacyNav: hideDeskV2ForLegacyNav,
+        isActive: isDeskV2Mode
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 120); });

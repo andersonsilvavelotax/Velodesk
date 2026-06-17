@@ -26,6 +26,19 @@ function fazerLogin() {
 // Função de navegação
 function navigateToPage(page) {
     console.log('Navegando para:', page);
+
+    var deskV2 = window.VelodeskDeskV2;
+    var deskV2Active = deskV2 && typeof deskV2.isActive === 'function' && deskV2.isActive();
+
+    if (deskV2Active && page === 'tickets' && typeof deskV2.restore === 'function') {
+        if (deskV2.restore()) {
+            return;
+        }
+    }
+
+    if (deskV2Active && page !== 'tickets' && typeof deskV2.hideForLegacyNav === 'function') {
+        deskV2.hideForLegacyNav();
+    }
     
     // Remover classe ticket-tab-open de todas as páginas ao navegar
     document.querySelectorAll('.page').forEach(p => {
