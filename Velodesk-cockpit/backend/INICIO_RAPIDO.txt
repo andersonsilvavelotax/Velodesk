@@ -1,0 +1,61 @@
+========================================
+  VELODESK WHATSAPP BACKEND
+  Guia de Início Rápido
+========================================
+
+PASSO 1: INSTALAR NODE.JS
+-------------------------
+1. Baixe em: https://nodejs.org/
+2. Instale a versão LTS
+3. IMPORTANTE: Feche e reabra o terminal após instalar
+
+PASSO 2: VERIFICAR INSTALAÇÃO
+------------------------------
+Abra um novo terminal e execute:
+  node --version
+  npm --version
+
+Se mostrar as versões, está instalado corretamente!
+
+PASSO 3: INSTALAR DEPENDÊNCIAS
+-------------------------------
+No terminal, navegue até a pasta backend:
+  cd "C:\Users\velot\Desktop\Projeto Velodesk\V2\backend"
+
+Execute:
+  npm install
+
+PASSO 4: INICIAR SERVIDOR
+--------------------------
+Execute:
+  npm start
+
+Ou use o script:
+  start.bat
+
+PASSO 5: CONECTAR WHATSAPP
+---------------------------
+1. Um QR Code aparecerá no terminal
+2. Abra WhatsApp no celular
+3. Vá em: Configurações > Aparelhos conectados > Conectar um aparelho
+4. Escaneie o QR Code
+5. Aguarde: "WhatsApp Web conectado e pronto!"
+
+PASSO 6: USAR NO FRONTEND
+--------------------------
+1. Abra index.html no navegador
+2. Vá para aba Chat
+3. Clique em "Verificar Conexão"
+4. As conversas aparecerão automaticamente!
+
+========================================
+PROBLEMAS?
+========================================
+
+- npm não encontrado: Instale Node.js e reabra o terminal
+- Erro ao instalar: Execute: npm cache clean --force
+- Porta 3000 em uso: Feche outros programas ou altere a porta
+
+Mais detalhes em: COMO_INSTALAR_NODEJS.md e README.md
+
+
