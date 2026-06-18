@@ -60,7 +60,13 @@
         cascadeDocBound: false,
         escalonar: null,
         escalonarMenuOpen: false,
-        escalonarDocBound: false
+        escalonarDocBound: false,
+        createTicketOpen: false,
+        createTicketClient: null,
+        createTicketClientKey: null,
+        createTicketPreviewVisible: false,
+        createTicketChannel: 'Telefone',
+        createTicketEventsBound: false
     };
 
     function isDeskV2Mode() {
@@ -568,8 +574,429 @@
         return msgs;
     }
 
+    function getCreateTicketHistoryHtml(clientKey) {
+        var items;
+        if (clientKey === '12345678901') {
+            items = [
+                { dot: '#15A237', title: 'Queda de sinal — resolvido', meta: '12/03/2026 · Internet Fibra · #1781698000012' },
+                { dot: '#15A237', title: 'Upgrade de plano — concluído', meta: '08/01/2026 · Solicitação · #1781690000087' },
+                { dot: '#9CA3AF', title: 'Dúvida sobre fatura — resolvido', meta: '21/11/2025 · Financeiro · #1781680000034' }
+            ];
+        } else {
+            items = [
+                { dot: '#9CA3AF', title: 'Nenhum histórico recente', meta: '—' }
+            ];
+        }
+        return items.map(function (it) {
+            return '<div class="hist-item">' +
+                '<span class="hist-item__dot" style="background:' + it.dot + '"></span>' +
+                '<div><div class="hist-item__title">' + escapeHtml(it.title) + '</div>' +
+                '<div class="hist-item__meta">' + escapeHtml(it.meta) + '</div></div></div>';
+        }).join('');
+    }
+
+    function getCreateTicketWorkspaceHtml() {
+        var agent = escapeHtml(getAgentName());
+        return '<div class="ct-workspace" id="createTicketWorkspace" aria-hidden="true">' +
+            '<div class="ct-form-panel" id="createTicketFormPanel">' +
+            '<header class="ct-header">' +
+            '<button type="button" class="ct-back-btn" id="btnCreateTicketBack" title="Voltar"><i class="ti ti-arrow-left"></i></button>' +
+            '<h2 class="ct-header__title">Criar ticket</h2>' +
+            '<span class="ct-header__badge">Novo</span></header>' +
+            '<div class="ct-body">' +
+            '<div class="ct-sec-lbl">Cliente</div>' +
+            '<div class="ct-field"><label class="ct-flbl" for="ctClientSearch">Buscar por CPF, nome ou e-mail <span class="ct-req">*</span></label>' +
+            '<div class="cpf-wrap">' +
+            '<input type="text" class="cpf-inp" id="ctClientSearch" placeholder="123.456.789-01 ou nome do cliente" autocomplete="off">' +
+            '<button type="button" class="cpf-btn" id="btnCtClientSearch"><i class="ti ti-search"></i> Buscar</button>' +
+            '</div></div>' +
+            '<div class="ct-field"><label class="ct-flbl">Canal de entrada <span class="ct-req">*</span></label>' +
+            '<div class="ch-grid" id="ctChannelGrid">' +
+            '<button type="button" class="ch-opt" data-channel="WhatsApp"><i class="ti ti-brand-whatsapp"></i><span>WhatsApp</span></button>' +
+            '<button type="button" class="ch-opt on" data-channel="Telefone"><i class="ti ti-phone"></i><span>Telefone</span></button>' +
+            '<button type="button" class="ch-opt" data-channel="E-mail"><i class="ti ti-mail"></i><span>E-mail</span></button>' +
+            '</div></div>' +
+            '<div class="ct-field"><label class="ct-flbl" for="ctAssunto">Assunto <span class="ct-req">*</span></label>' +
+            '<input type="text" class="ct-input" id="ctAssunto" name="assunto" placeholder="Resumo breve do problema ou solicitação"></div>' +
+            '<div class="ct-sec-lbl">Classificação</div>' +
+            '<div class="f-row2">' +
+            '<div class="ct-field"><label class="ct-flbl" for="ctTipo">Tipo <span class="ct-req">*</span></label>' +
+            '<select class="ct-select" id="ctTipo" name="tipo">' +
+            '<option>Reclamação</option><option>Solicitação</option><option>Dúvida</option><option>Elogio</option></select></div>' +
+            '<div class="ct-field"><label class="ct-flbl" for="ctProduto">Produto <span class="ct-req">*</span></label>' +
+            '<select class="ct-select" id="ctProduto" name="produto">' +
+            '<option>Internet Fibra</option><option>TV</option><option>Telefone</option><option>Combo</option></select></div>' +
+            '</div>' +
+            '<div class="f-row2">' +
+            '<div class="ct-field"><label class="ct-flbl" for="ctMotivo">Motivo <span class="ct-req">*</span></label>' +
+            '<select class="ct-select" id="ctMotivo" name="motivo">' +
+            '<option>Lentidão</option><option>Queda de sinal</option><option>Sem conexão</option><option>Intermitência</option></select></div>' +
+            '<div class="ct-field"><label class="ct-flbl" for="ctAtribuir">Atribuir a</label>' +
+            '<select class="ct-select" id="ctAtribuir" name="atribuir">' +
+            '<option>' + agent + ' (eu)</option><option>Fila geral</option><option>Nível 2</option></select></div>' +
+            '</div>' +
+            '<div class="ct-field"><label class="ct-flbl" for="ctDescricao">Descrição</label>' +
+            '<textarea class="ct-textarea" id="ctDescricao" name="descricao" placeholder="Descreva o problema ou solicitação com detalhes…"></textarea></div>' +
+            '</div>' +
+            '<footer class="ct-footer">' +
+            '<button type="button" class="ct-btn-cancel" id="btnCreateTicketCancel">Cancelar</button>' +
+            '<button type="button" class="ct-btn-save" id="btnCreateTicketSave"><i class="ti ti-device-floppy"></i> Salvar</button>' +
+            '</footer></div>' +
+            '<aside class="preview-panel" id="createTicketPreview">' +
+            '<header class="preview-header">' +
+            '<span class="preview-header__title">Prévia do Ticket</span>' +
+            '<span class="preview-header__live"><span class="preview-header__dot"></span>Atualiza em tempo real</span></header>' +
+            '<div class="prev-card">' +
+            '<div class="prev-card__top">' +
+            '<div class="prev-card__id">#AUTO · criado agora por ' + agent + '</div>' +
+            '<div class="prev-card-title" id="prevCardTitle">Sem título</div>' +
+            '<div class="prev-card__sub" id="prevCardSub">—</div></div>' +
+            '<div class="prev-card__body">' +
+            '<div class="prev-line"><i class="ti ti-phone"></i><span class="prev-tag ch" id="prevTagChannel">Telefone</span></div>' +
+            '<div class="prev-line"><i class="ti ti-tag"></i>' +
+            '<span class="prev-tag type" id="prevTagTipo">Reclamação</span>' +
+            '<span class="prev-tag prod" id="prevTagProduto">Internet Fibra</span>' +
+            '<span class="prev-tag mot" id="prevTagMotivo">Lentidão</span></div>' +
+            '<div class="prev-line"><i class="ti ti-user"></i>Atribuído a <span class="prev-atribuido" id="prevAtribuido">' + agent + ' (eu)</span></div>' +
+            '<div class="prev-line"><i class="ti ti-clock"></i>Aberto em <span class="prev-opened-date" id="prevOpenedAt">—</span></div></div>' +
+            '<div class="prev-desc" id="prevDesc">""</div></div>' +
+            '<div class="preview-history">' +
+            '<div class="ct-sec-lbl">Histórico da Cliente</div>' +
+            '<div id="prevHistoryList"></div></div></aside></div>';
+    }
+
+    function searchClientByQuery(query) {
+        var q = String(query || '').trim().toLowerCase();
+        if (q.length < 3) return null;
+        var digits = q.replace(/\D/g, '');
+        try {
+            var db = JSON.parse(localStorage.getItem('velodeskClientDB') || '{}');
+            var keys = Object.keys(db);
+            var i;
+            if (digits.length >= 3) {
+                for (i = 0; i < keys.length; i++) {
+                    if (keys[i].indexOf(digits) === 0 || digits.indexOf(keys[i]) === 0) {
+                        return { key: keys[i], client: db[keys[i]] };
+                    }
+                }
+            }
+            for (i = 0; i < keys.length; i++) {
+                var c = db[keys[i]];
+                var name = String(c.name || '').toLowerCase();
+                var email = String(c.email || '').toLowerCase();
+                if (name.indexOf(q) >= 0 || email.indexOf(q) >= 0) {
+                    return { key: keys[i], client: c };
+                }
+            }
+        } catch (e) { /* noop */ }
+        return null;
+    }
+
+    function formatCreateTicketOpenedAt() {
+        var d = new Date();
+        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+            ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function resetCreateTicketForm() {
+        var search = $('#ctClientSearch');
+        var assunto = $('#ctAssunto');
+        var desc = $('#ctDescricao');
+        if (search) search.value = '';
+        if (assunto) assunto.value = '';
+        if (desc) desc.value = '';
+        var tipo = $('#ctTipo');
+        var prod = $('#ctProduto');
+        var mot = $('#ctMotivo');
+        var atr = $('#ctAtribuir');
+        if (tipo) tipo.selectedIndex = 0;
+        if (prod) prod.selectedIndex = 0;
+        if (mot) mot.selectedIndex = 0;
+        if (atr) atr.selectedIndex = 0;
+        state.createTicketClient = null;
+        state.createTicketClientKey = null;
+        state.createTicketPreviewVisible = false;
+        state.createTicketChannel = 'Telefone';
+        $$('#ctChannelGrid .ch-opt').forEach(function (opt) {
+            opt.classList.toggle('on', opt.getAttribute('data-channel') === 'Telefone');
+        });
+        var shell = $('#deskAppShell');
+        if (shell) shell.classList.remove('has-preview');
+        var preview = $('#createTicketPreview');
+        if (preview) preview.classList.remove('visible');
+        updateCreateTicketPreviewFields();
+    }
+
+    function updateCreateTicketPreviewFields() {
+        var assunto = $('#ctAssunto');
+        var title = $('#prevCardTitle');
+        if (title) title.textContent = (assunto && assunto.value.trim()) || 'Sem título';
+        var sub = $('#prevCardSub');
+        if (sub) {
+            if (state.createTicketClient) {
+                var cpf = formatCpf(state.createTicketClientKey || state.createTicketClient.cpf);
+                sub.textContent = (state.createTicketClient.name || 'Cliente') + ' · CPF ' + cpf;
+            } else {
+                sub.textContent = '—';
+            }
+        }
+        var ch = $('#prevTagChannel');
+        if (ch) ch.textContent = state.createTicketChannel || 'Telefone';
+        var tipo = $('#ctTipo');
+        var prod = $('#ctProduto');
+        var mot = $('#ctMotivo');
+        var atr = $('#ctAtribuir');
+        var pt = $('#prevTagTipo');
+        var pp = $('#prevTagProduto');
+        var pm = $('#prevTagMotivo');
+        var pa = $('#prevAtribuido');
+        if (pt && tipo) pt.textContent = tipo.value;
+        if (pp && prod) pp.textContent = prod.value;
+        if (pm && mot) pm.textContent = mot.value;
+        if (pa && atr) pa.textContent = atr.value;
+        var opened = $('#prevOpenedAt');
+        if (opened) opened.textContent = formatCreateTicketOpenedAt();
+        var desc = $('#ctDescricao');
+        var pd = $('#prevDesc');
+        if (pd) pd.textContent = '"' + ((desc && desc.value) || '') + '"';
+    }
+
+    function showCreateTicketPreview(clientResult) {
+        if (!clientResult) return;
+        state.createTicketClient = clientResult.client;
+        state.createTicketClientKey = clientResult.key;
+        state.createTicketPreviewVisible = true;
+        var shell = $('#deskAppShell');
+        if (shell) shell.classList.add('has-preview');
+        var preview = $('#createTicketPreview');
+        if (preview) preview.classList.add('visible');
+        var hist = $('#prevHistoryList');
+        if (hist) hist.innerHTML = getCreateTicketHistoryHtml(clientResult.key);
+        updateCreateTicketPreviewFields();
+    }
+
+    function hideCreateTicketPreview() {
+        state.createTicketClient = null;
+        state.createTicketClientKey = null;
+        state.createTicketPreviewVisible = false;
+        var shell = $('#deskAppShell');
+        if (shell) shell.classList.remove('has-preview');
+        var preview = $('#createTicketPreview');
+        if (preview) preview.classList.remove('visible');
+    }
+
+    function runCreateTicketClientSearch() {
+        var input = $('#ctClientSearch');
+        var query = input ? input.value.trim() : '';
+        if (query.length < 3) {
+            if (typeof showNotification === 'function') {
+                showNotification('Digite ao menos 3 caracteres para buscar.', 'warning');
+            }
+            return;
+        }
+        var result = searchClientByQuery(query);
+        if (!result) {
+            hideCreateTicketPreview();
+            if (typeof showNotification === 'function') {
+                showNotification('Cliente não encontrado.', 'error');
+            }
+            return;
+        }
+        showCreateTicketPreview(result);
+        if (typeof showNotification === 'function') {
+            showNotification('Cliente encontrado: ' + result.client.name, 'success');
+        }
+    }
+
+    function submitCreateTicket() {
+        var assuntoEl = $('#ctAssunto');
+        var assunto = assuntoEl ? assuntoEl.value.trim() : '';
+        if (!assunto) {
+            if (typeof showNotification === 'function') showNotification('Informe o assunto do ticket.', 'warning');
+            if (assuntoEl) assuntoEl.focus();
+            return;
+        }
+        if (!state.createTicketClient) {
+            if (typeof showNotification === 'function') {
+                showNotification('Busque e selecione um cliente antes de salvar.', 'warning');
+            }
+            return;
+        }
+        var client = state.createTicketClient;
+        var columns = getKanbanColumns();
+        if (!columns.length) {
+            columns = [
+                { id: 'novos', name: 'Novos', tickets: [] },
+                { id: 'em-andamento', name: 'Em Andamento', tickets: [] },
+                { id: 'em-espera', name: 'Pendente', tickets: [] },
+                { id: 'pendentes', name: 'Aguardando retorno', tickets: [] },
+                { id: 'resolvidos', name: 'Resolvidos', tickets: [] }
+            ];
+        }
+        var novosBox = columns.find(function (b) { return b.id === 'novos'; });
+        if (!novosBox) {
+            novosBox = { id: 'novos', name: 'Novos', tickets: [] };
+            columns.unshift(novosBox);
+        }
+        if (!novosBox.tickets) novosBox.tickets = [];
+        var now = new Date().toISOString();
+        var agent = getAgentName();
+        var descEl = $('#ctDescricao');
+        var desc = descEl ? descEl.value.trim() : '';
+        var tipoEl = $('#ctTipo');
+        var prodEl = $('#ctProduto');
+        var motEl = $('#ctMotivo');
+        var atrEl = $('#ctAtribuir');
+        var tipo = tipoEl ? tipoEl.value : 'Reclamação';
+        var produto = prodEl ? prodEl.value : 'Internet Fibra';
+        var motivo = motEl ? motEl.value : 'Lentidão';
+        var atribuir = atrEl ? atrEl.value : agent + ' (eu)';
+        var cpfDigits = state.createTicketClientKey || normalizeCpf(client.cpf);
+        var ticket = {
+            id: Date.now(),
+            title: assunto,
+            description: desc || assunto,
+            status: 'novo',
+            priority: 'normal',
+            channel: state.createTicketChannel,
+            source: state.createTicketChannel,
+            openedBy: 'agent',
+            createdAt: now,
+            updatedAt: now,
+            messages: desc ? [{
+                fromClient: true,
+                type: 'client',
+                text: desc,
+                timestamp: now,
+                author: client.name
+            }] : [],
+            internalNotes: [],
+            solicitante: client.name,
+            clientName: client.name,
+            clientCPF: formatCpf(cpfDigits),
+            clientEmail: client.email || '',
+            clientPhone: client.telefone || client.phone || '',
+            responsibleAgent: agent,
+            group: atribuir.indexOf('Nível') >= 0 ? 'Nível 2' : (atribuir.indexOf('Fila') >= 0 ? 'Fila geral' : agent),
+            lateralForm: {
+                cpf: cpfDigits,
+                canal: state.createTicketChannel,
+                classificacaoTipo: tipo,
+                produto: produto,
+                motivo: motivo,
+                detalhe: 'Em análise',
+                responsavel: agent,
+                atribuido: atribuir,
+                automacaoCategoria: '',
+                automacaoAcao: ''
+            }
+        };
+        normalizeTicketForDeskV2(ticket);
+        novosBox.tickets.unshift(ticket);
+        saveKanbanColumns(columns);
+        closeCreateTicketPanel();
+        state.activeQueue = 'novos';
+        state.activeTicketId = ticket.id;
+        renderQueueList();
+        renderTicketCards();
+        renderMainTicket({ ticket: ticket, boxId: 'novos', box: novosBox, queueId: 'novos' });
+        if (typeof showNotification === 'function') showNotification('Ticket criado com sucesso.', 'success');
+    }
+
+    function bindCreateTicketEvents() {
+        if (state.createTicketEventsBound) return;
+        state.createTicketEventsBound = true;
+
+        var root = $('#velodeskDeskV2Root');
+        if (!root) return;
+
+        root.addEventListener('click', function (e) {
+            if (!state.createTicketOpen) return;
+            if (e.target.closest('#btnCreateTicketBack') || e.target.closest('#btnCreateTicketCancel')) {
+                e.preventDefault();
+                closeCreateTicketPanel();
+                return;
+            }
+            if (e.target.closest('#btnCreateTicketSave')) {
+                e.preventDefault();
+                submitCreateTicket();
+                return;
+            }
+            if (e.target.closest('#btnCtClientSearch')) {
+                e.preventDefault();
+                runCreateTicketClientSearch();
+                return;
+            }
+            var chOpt = e.target.closest('#ctChannelGrid .ch-opt');
+            if (chOpt) {
+                e.preventDefault();
+                state.createTicketChannel = chOpt.getAttribute('data-channel');
+                $$('#ctChannelGrid .ch-opt').forEach(function (o) { o.classList.remove('on'); });
+                chOpt.classList.add('on');
+                updateCreateTicketPreviewFields();
+            }
+        });
+
+        root.addEventListener('input', function (e) {
+            if (!state.createTicketOpen || !state.createTicketPreviewVisible) return;
+            if (e.target.id === 'ctAssunto' || e.target.id === 'ctDescricao') {
+                updateCreateTicketPreviewFields();
+            }
+        });
+
+        root.addEventListener('change', function (e) {
+            if (!state.createTicketOpen || !state.createTicketPreviewVisible) return;
+            var name = e.target.getAttribute('name');
+            if (name === 'tipo' || name === 'produto' || name === 'motivo' || name === 'atribuir') {
+                updateCreateTicketPreviewFields();
+            }
+        });
+
+        root.addEventListener('keydown', function (e) {
+            if (!state.createTicketOpen) return;
+            if (e.target.id === 'ctClientSearch' && e.key === 'Enter') {
+                e.preventDefault();
+                runCreateTicketClientSearch();
+            }
+        });
+    }
+
+    function openCreateTicketPanel() {
+        bindCreateTicketEvents();
+        state.createTicketOpen = true;
+        var shell = $('#deskAppShell');
+        if (shell) shell.classList.add('is-create-ticket');
+        resetCreateTicketForm();
+        var queue = $('#crmQueuePanel');
+        if (queue) queue.classList.add('is-create-strip');
+        var opened = $('#prevOpenedAt');
+        if (opened) opened.textContent = formatCreateTicketOpenedAt();
+        var workspace = $('#createTicketWorkspace');
+        if (workspace) {
+            workspace.setAttribute('aria-hidden', 'false');
+            workspace.classList.add('is-visible');
+        }
+    }
+
+    function closeCreateTicketPanel() {
+        state.createTicketOpen = false;
+        var shell = $('#deskAppShell');
+        if (shell) {
+            shell.classList.remove('is-create-ticket');
+            shell.classList.remove('has-preview');
+        }
+        var workspace = $('#createTicketWorkspace');
+        if (workspace) {
+            workspace.setAttribute('aria-hidden', 'true');
+            workspace.classList.remove('is-visible');
+        }
+        var queue = $('#crmQueuePanel');
+        if (queue) queue.classList.remove('is-create-strip');
+        hideCreateTicketPreview();
+    }
+
     function getShellHtml() {
-        return '<div class="app-shell">' +
+        return '<div class="app-shell" id="deskAppShell">' +
             '<aside class="queue-panel" id="crmQueuePanel">' +
             '<div class="queue-panel__inner">' +
             '<div class="queue-panel__header">' +
@@ -638,7 +1065,9 @@
             '<div class="crm-right-panel__footer">' +
             '<button type="button" class="rp-footer-btn rp-footer-btn--secondary" id="btnOpenChat"><i class="ti ti-message-circle"></i> Abrir conversa</button>' +
             '<button type="button" class="rp-footer-btn rp-footer-btn--primary" id="btnSaveTicket"><i class="ti ti-device-floppy"></i> Salvar no ticket</button>' +
-            '</div></aside></div>';
+            '</div></aside>' +
+            getCreateTicketWorkspaceHtml() +
+            '</div>';
     }
 
     function getEscalonarSectionHtml() {
@@ -1682,6 +2111,7 @@
     }
 
     function selectTicket(ticketId) {
+        if (state.createTicketOpen) closeCreateTicketPanel();
         var entry = findTicketEntry(ticketId);
         if (!entry) return;
         state.activeTicketId = ticketId;
@@ -1692,6 +2122,7 @@
     }
 
     function selectQueue(queueId) {
+        if (state.createTicketOpen) closeCreateTicketPanel();
         state.activeQueue = queueId;
         var entries = getFilteredTickets();
         if (!entries.find(function (e) { return String(e.ticket.id) === String(state.activeTicketId); })) {
@@ -1755,8 +2186,7 @@
         var newTicket = $('#crmNewTicket');
         if (newTicket) {
             newTicket.onclick = function () {
-                if (typeof navigateToPage === 'function') navigateToPage('tickets');
-                if (typeof showNotification === 'function') showNotification('Use a página Tickets para criar novos chamados.', 'info');
+                openCreateTicketPanel();
             };
         }
 
